@@ -1,6 +1,7 @@
 /**
- * FitTracker - Application Logic
- * iOS-inspired, premium performance training logger and statistics suite
+ * IRONPROGRESS v2 - Application Logic
+ * iOS-inspired, premium performance training logger and progression suite.
+ * Fully isolated under the 'ironprogress_v2_' namespace.
  */
 
 // --- APPLICATION STATE ---
@@ -22,17 +23,43 @@ const state = {
   }
 };
 
-// --- MOCK DATA FOR USER TESTING ---
+// --- MOCK PLANS WITH DETAILED PROGRESSION PROFILES ---
 const MOCK_PLANS = [
   {
     id: "plan-push",
     name: "Push (Brust, Trizeps, Schultern)",
     split: "5er Split",
     exercises: [
-      { name: "Bankdrücken (Langhantel)", sets: 4, reps: 8, rest: 120 },
-      { name: "Schrägbankdrücken (Kurzhantel)", sets: 3, reps: 10, rest: 90 },
-      { name: "Schulterdrücken (Kurzhantel)", sets: 3, reps: 10, rest: 90 },
-      { name: "Trizepsdrücken (Kabel)", sets: 3, reps: 12, rest: 60 }
+      { 
+        name: "Bankdrücken (Langhantel)", 
+        sets: 3, 
+        reps: 10, 
+        rest: 120,
+        exercise_type: "compound",
+        target_rep_min: 8,
+        target_rep_max: 10,
+        available_weights: [60, 70, 80, 82.5, 85, 90]
+      },
+      { 
+        name: "Schulterdrücken (Kurzhantel)", 
+        sets: 3, 
+        reps: 10, 
+        rest: 90,
+        exercise_type: "isolation",
+        target_rep_min: 8,
+        target_rep_max: 10,
+        available_weights: [15, 17.5, 20, 22.5, 25, 27.5, 30]
+      },
+      { 
+        name: "Trizepsdrücken (Kabel)", 
+        sets: 3, 
+        reps: 12, 
+        rest: 60,
+        exercise_type: "small_isolation",
+        target_rep_min: 10,
+        target_rep_max: 12,
+        available_weights: [20, 22.5, 25, 27.5, 30, 32.5, 35]
+      }
     ]
   },
   {
@@ -40,20 +67,36 @@ const MOCK_PLANS = [
     name: "Pull (Rücken, Bizeps)",
     split: "5er Split",
     exercises: [
-      { name: "Kreuzheben", sets: 3, reps: 5, rest: 180 },
-      { name: "Klimmzüge", sets: 4, reps: 8, rest: 90 },
-      { name: "Langhantelrudern", sets: 3, reps: 10, rest: 90 },
-      { name: "Hammer Curls", sets: 3, reps: 12, rest: 60 }
-    ]
-  },
-  {
-    id: "plan-legs",
-    name: "Beine & Bauch",
-    split: "5er Split",
-    exercises: [
-      { name: "Kniebeugen", sets: 4, reps: 8, rest: 120 },
-      { name: "Beinstrecker", sets: 3, reps: 12, rest: 60 },
-      { name: "Wadenheben", sets: 4, reps: 15, rest: 60 }
+      { 
+        name: "Kreuzheben", 
+        sets: 3, 
+        reps: 5, 
+        rest: 180,
+        exercise_type: "compound",
+        target_rep_min: 5,
+        target_rep_max: 5,
+        available_weights: [90, 95, 100, 102.5, 105, 110]
+      },
+      { 
+        name: "Klimmzüge", 
+        sets: 4, 
+        reps: 8, 
+        rest: 90,
+        exercise_type: "bodyweight",
+        target_rep_min: 6,
+        target_rep_max: 8,
+        available_weights: [0, 2.5, 5, 7.5, 10, 12.5, 15] // weighted pullups
+      },
+      { 
+        name: "Hammer Curls", 
+        sets: 3, 
+        reps: 12, 
+        rest: 60,
+        exercise_type: "isolation",
+        target_rep_min: 10,
+        target_rep_max: 12,
+        available_weights: [10, 12.5, 14, 16, 18, 20]
+      }
     ]
   }
 ];
@@ -80,8 +123,6 @@ function generateMockHistory() {
       let weight = 0;
       if (ex.name.includes("Bankdrücken")) {
         weight = benchWeights[i];
-      } else if (ex.name.includes("Schrägbankdrücken")) {
-        weight = 22.5 + indexFactor * 2.5;
       } else if (ex.name.includes("Schulterdrücken")) {
         weight = 17.5 + indexFactor * 2.5;
       } else if (ex.name.includes("Trizepsdrücken")) {
@@ -89,11 +130,9 @@ function generateMockHistory() {
       } else if (ex.name.includes("Kreuzheben")) {
         weight = deadliftWeights[i];
       } else if (ex.name.includes("Klimmzüge")) {
-        weight = 0; // Bodyweight
-      } else if (ex.name.includes("Langhantelrudern")) {
-        weight = 50 + indexFactor * 5;
+        weight = indexFactor * 2.5; // added weight
       } else if (ex.name.includes("Hammer Curls")) {
-        weight = 14 + indexFactor * 2;
+        weight = 12.5 + indexFactor * 1.5;
       }
 
       const completedSets = [];
@@ -119,6 +158,7 @@ function generateMockHistory() {
       splitName: plan.split || 'Einzelne Pläne',
       date: workoutDate.toISOString(),
       durationMinutes: 45 + Math.floor(Math.random() * 15),
+      avgRestSeconds: plan.exercises.reduce((sum, e) => sum + e.rest, 0) / plan.exercises.length, // logged rest
       exercises: workoutExercises
     });
   }
@@ -142,19 +182,19 @@ function generateMockWeightHistory() {
   return list;
 }
 
-// --- LOCAL STORAGE HANDLING ---
+// --- LOCAL STORAGE HANDLING (ISOLATED NAMESPACE) ---
 function saveToLocalStorage() {
-  localStorage.setItem('fittracker_plans', JSON.stringify(state.plans));
-  localStorage.setItem('fittracker_history', JSON.stringify(state.history));
-  localStorage.setItem('fittracker_weightHistory', JSON.stringify(state.weightHistory));
-  localStorage.setItem('fittracker_settings', JSON.stringify(state.settings));
+  localStorage.setItem('ironprogress_v2_plans', JSON.stringify(state.plans));
+  localStorage.setItem('ironprogress_v2_history', JSON.stringify(state.history));
+  localStorage.setItem('ironprogress_v2_weightHistory', JSON.stringify(state.weightHistory));
+  localStorage.setItem('ironprogress_v2_settings', JSON.stringify(state.settings));
 }
 
 function loadFromLocalStorage() {
-  const plansStr = localStorage.getItem('fittracker_plans');
-  const histStr = localStorage.getItem('fittracker_history');
-  const weightStr = localStorage.getItem('fittracker_weightHistory');
-  const settingsStr = localStorage.getItem('fittracker_settings');
+  const plansStr = localStorage.getItem('ironprogress_v2_plans');
+  const histStr = localStorage.getItem('ironprogress_v2_history');
+  const weightStr = localStorage.getItem('ironprogress_v2_weightHistory');
+  const settingsStr = localStorage.getItem('ironprogress_v2_settings');
   
   if (plansStr) state.plans = JSON.parse(plansStr);
   if (histStr) state.history = JSON.parse(histStr);
@@ -164,24 +204,20 @@ function loadFromLocalStorage() {
 
 // --- APP NAVIGATION ---
 function showView(viewId, headerTitle) {
-  // Hide all views
   document.querySelectorAll('.view').forEach(view => {
     view.classList.remove('active');
   });
 
-  // Show active view
   const targetView = document.getElementById(`view-${viewId}`);
   if (targetView) {
     targetView.classList.add('active');
   }
 
-  // Update header title
   const headerTitleEl = document.getElementById('header-title');
   if (headerTitleEl) {
     headerTitleEl.innerText = headerTitle;
   }
 
-  // Manage header action button visibility based on view
   const actionBtn = document.getElementById('header-action-btn');
   if (viewId === 'workout') {
     actionBtn.classList.add('hidden');
@@ -196,7 +232,6 @@ function showView(viewId, headerTitle) {
     actionBtn.classList.add('hidden');
   }
 
-  // Update Bottom Tab Bar highlight
   document.querySelectorAll('.tab-item').forEach(item => {
     if (item.dataset.tab === viewId) {
       item.classList.add('active');
@@ -205,7 +240,6 @@ function showView(viewId, headerTitle) {
     }
   });
 
-  // View-specific initializations
   if (viewId === 'home') {
     renderHome();
   } else if (viewId === 'stats') {
@@ -221,7 +255,6 @@ function renderHome() {
   const recentList = document.getElementById('recent-workouts-list');
   const recentHeader = document.querySelector('.recent-workouts-header');
   
-  // Render Plans grouped by Splits (Überordner)
   if (state.plans.length === 0) {
     splitsContainer.innerHTML = `
       <div class="empty-state">
@@ -238,7 +271,6 @@ function renderHome() {
   } else {
     splitsContainer.innerHTML = '';
     
-    // Group plans by their split name
     const groupedPlans = {};
     state.plans.forEach(plan => {
       const splitName = (plan.split && plan.split.trim()) ? plan.split.trim() : "Einzelne Pläne";
@@ -248,7 +280,6 @@ function renderHome() {
       groupedPlans[splitName].push(plan);
     });
 
-    // Render each split folder
     Object.keys(groupedPlans).sort().forEach(splitName => {
       const splitGroup = document.createElement('div');
       splitGroup.className = 'split-group';
@@ -273,7 +304,7 @@ function renderHome() {
           <div class="plan-card-header">
             <h3>${plan.name}</h3>
           </div>
-          <div class="plan-card-meta">${plan.exercises.length} Übungen</div>
+          <div class="plan-card-meta">${plan.exercises.length} Übungen &bull; Target: ${plan.exercises[0].target_rep_min || 8}-${plan.exercises[0].target_rep_max || 12} Reps</div>
           <div class="plan-card-exercises">
             ${exercisesHTML}
           </div>
@@ -292,7 +323,6 @@ function renderHome() {
       splitsContainer.appendChild(splitGroup);
     });
 
-    // Wire up buttons
     document.querySelectorAll('.btn-start-plan').forEach(btn => {
       btn.onclick = (e) => startWorkout(e.target.dataset.id);
     });
@@ -314,7 +344,6 @@ function renderHome() {
     recentHeader.classList.remove('hidden');
     recentList.innerHTML = '';
     
-    // Show last 4 completed workouts
     const recent = [...state.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
     
     recent.forEach(work => {
@@ -387,15 +416,7 @@ function updateGlobalMetrics() {
   statAvgDuration.innerText = `${avgDuration} Min`;
 }
 
-function deletePlan(planId) {
-  if (confirm('Bist du sicher, dass du diesen Trainingsplan löschen möchtest?')) {
-    state.plans = state.plans.filter(p => p.id !== planId);
-    saveToLocalStorage();
-    renderHome();
-  }
-}
-
-// --- CREATOR VIEW CONTROLLER (WITH EDIT FLOW) ---
+// --- CREATOR VIEW CONTROLLER (WITH DYNAMIC PROGRESSION FIELDS) ---
 let exerciseFieldIndex = 0;
 
 function setupCreatorView() {
@@ -403,7 +424,6 @@ function setupCreatorView() {
   container.innerHTML = '';
   exerciseFieldIndex = 0;
   
-  // Start with 1 default empty exercise field
   addExerciseField();
 }
 
@@ -415,13 +435,16 @@ function resetCreatorForm() {
   setupCreatorView();
 }
 
-function addExerciseField(name = '', sets = 3, reps = 10, rest = 90) {
+function addExerciseField(name = '', sets = 3, reps = 10, rest = 90, exercise_type = 'compound', target_rep_min = 8, target_rep_max = 12, available_weights = []) {
   const container = document.getElementById('creator-exercises-container');
   const index = exerciseFieldIndex++;
 
   const card = document.createElement('div');
   card.className = 'creator-exercise-card';
   card.id = `creator-ex-card-${index}`;
+  
+  const weightsStr = Array.isArray(available_weights) ? available_weights.join(', ') : available_weights;
+
   card.innerHTML = `
     <div class="creator-exercise-header">
       <span class="creator-exercise-title">Übung #${index + 1}</span>
@@ -446,20 +469,82 @@ function addExerciseField(name = '', sets = 3, reps = 10, rest = 90) {
         <input type="number" class="ex-rest" value="${rest}" min="0" max="600" required>
       </div>
     </div>
+
+    <!-- NEW PROGRESSION FIELDS -->
+    <button type="button" class="creator-exercise-advanced-toggle" onclick="toggleAdvancedFields(${index})">
+      ⚙️ Progressions-Coach einrichten
+    </button>
+
+    <div id="advanced-fields-${index}" class="creator-exercise-advanced hidden">
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label style="font-size:11px;">Übungstyp (Progressionstyp)</label>
+        <select class="ex-type ios-select" style="padding: 8px 30px 8px 12px; font-size:13px;" onchange="onExerciseTypeChange(${index})">
+          <option value="compound" ${exercise_type === 'compound' ? 'selected' : ''}>Grundübung (Compound)</option>
+          <option value="machine_compound" ${exercise_type === 'machine_compound' ? 'selected' : ''}>Maschinen-Grundübung</option>
+          <option value="isolation" ${exercise_type === 'isolation' ? 'selected' : ''}>Isolationsübung</option>
+          <option value="small_isolation" ${exercise_type === 'small_isolation' ? 'selected' : ''}>Kleine Isolationsübung</option>
+          <option value="bodyweight" ${exercise_type === 'bodyweight' ? 'selected' : ''}>Eigengewichtsübung</option>
+          <option value="assisted_bodyweight" ${exercise_type === 'assisted_bodyweight' ? 'selected' : ''}>Unterstützte Eigengewichtsübung</option>
+        </select>
+      </div>
+
+      <div class="exercise-inputs-row" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
+        <div class="small-input-group">
+          <label>Ziel Reps (Min)</label>
+          <input type="number" class="ex-rep-min" value="${target_rep_min}" min="1" max="100">
+        </div>
+        <div class="small-input-group">
+          <label>Ziel Reps (Max)</label>
+          <input type="number" class="ex-rep-max" value="${target_rep_max}" min="1" max="100">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="font-size:11px;">Verfügbare Gewichte im Gym (Komma-getrennt)</label>
+        <input type="text" class="ex-available-weights" value="${weightsStr}" placeholder="z.B. 10, 12.5, 15, 17.5, 20" autocomplete="off" style="padding:8px; font-size:13px;">
+      </div>
+    </div>
   `;
   container.appendChild(card);
   
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-window.removeExerciseField = function(index) {
+window.toggleAdvancedFields = function(index) {
+  const fields = document.getElementById(`advanced-fields-${index}`);
+  const toggleBtn = fields.previousElementSibling;
+  
+  if (fields.classList.contains('hidden')) {
+    fields.classList.remove('hidden');
+    toggleBtn.innerText = "⚙️ Progressions-Coach einklappen";
+  } else {
+    fields.classList.add('hidden');
+    toggleBtn.innerText = "⚙️ Progressions-Coach einrichten";
+  }
+};
+
+window.onExerciseTypeChange = function(index) {
   const card = document.getElementById(`creator-ex-card-${index}`);
-  if (card) {
-    card.remove();
-    // Re-index titles for clarity
-    document.querySelectorAll('.creator-exercise-card').forEach((c, idx) => {
-      c.querySelector('.creator-exercise-title').innerText = `Übung #${idx + 1}`;
-    });
+  const type = card.querySelector('.ex-type').value;
+  
+  const minInput = card.querySelector('.ex-rep-min');
+  const maxInput = card.querySelector('.ex-rep-max');
+  
+  if (type === 'compound') {
+    minInput.value = 6;
+    maxInput.value = 10;
+  } else if (type === 'machine_compound') {
+    minInput.value = 8;
+    maxInput.value = 12;
+  } else if (type === 'isolation') {
+    minInput.value = 10;
+    maxInput.value = 12;
+  } else if (type === 'small_isolation') {
+    minInput.value = 12;
+    maxInput.value = 15;
+  } else {
+    minInput.value = 8;
+    maxInput.value = 12;
   }
 };
 
@@ -467,19 +552,26 @@ function editPlan(planId) {
   const plan = state.plans.find(p => p.id === planId);
   if (!plan) return;
 
-  // Set form into edit mode
   document.getElementById('creator-edit-id').value = plan.id;
   document.getElementById('plan-name').value = plan.name;
   document.getElementById('plan-split').value = plan.split || '';
   document.getElementById('btn-save-plan').innerText = 'Änderungen speichern';
 
-  // Fill in exercises
   const container = document.getElementById('creator-exercises-container');
   container.innerHTML = '';
   exerciseFieldIndex = 0;
 
   plan.exercises.forEach(ex => {
-    addExerciseField(ex.name, ex.sets, ex.reps, ex.rest);
+    addExerciseField(
+      ex.name, 
+      ex.sets, 
+      ex.reps, 
+      ex.rest, 
+      ex.exercise_type || 'compound', 
+      ex.target_rep_min || 8, 
+      ex.target_rep_max || 12, 
+      ex.available_weights || []
+    );
   });
 
   showView('creator', 'Plan bearbeiten');
@@ -501,13 +593,33 @@ function saveNewPlan() {
     const sets = parseInt(card.querySelector('.ex-sets').value);
     const reps = parseInt(card.querySelector('.ex-reps').value);
     const rest = parseInt(card.querySelector('.ex-rest').value);
+    
+    // Progression fields
+    const type = card.querySelector('.ex-type').value;
+    const repMin = parseInt(card.querySelector('.ex-rep-min').value) || 8;
+    const repMax = parseInt(card.querySelector('.ex-rep-max').value) || 12;
+    const weightsText = card.querySelector('.ex-available-weights').value;
+    
+    const availableWeights = weightsText.split(',')
+      .map(w => parseFloat(w.trim()))
+      .filter(w => !isNaN(w) && w > 0)
+      .sort((a, b) => a - b);
 
     if (!name || isNaN(sets) || isNaN(reps) || isNaN(rest)) {
       isValid = false;
       return;
     }
 
-    exercises.push({ name, sets, reps, rest });
+    exercises.push({ 
+      name, 
+      sets, 
+      reps, 
+      rest,
+      exercise_type: type,
+      target_rep_min: repMin,
+      target_rep_max: repMax,
+      available_weights: availableWeights
+    });
   });
 
   if (!isValid || exercises.length === 0) {
@@ -516,7 +628,6 @@ function saveNewPlan() {
   }
 
   if (editId) {
-    // Edit existing plan
     const planIndex = state.plans.findIndex(p => p.id === editId);
     if (planIndex !== -1) {
       state.plans[planIndex].name = planName;
@@ -524,7 +635,6 @@ function saveNewPlan() {
       state.plans[planIndex].exercises = exercises;
     }
   } else {
-    // Create new plan
     const newPlan = {
       id: `plan-${Date.now()}`,
       name: planName,
@@ -549,7 +659,6 @@ function startWorkout(planId) {
   const plan = state.plans.find(p => p.id === planId);
   if (!plan) return;
 
-  // Initialize Active Workout State
   state.activeWorkout = {
     planId: plan.id,
     planName: plan.name,
@@ -560,7 +669,6 @@ function startWorkout(planId) {
       let historyWeight = 0;
       let historyReps = ex.reps;
 
-      // Find the most recent workout where this exercise was completed
       const relevantHistory = [...state.history].sort((a, b) => new Date(b.date) - new Date(a.date));
       const pastWorkout = relevantHistory.find(w => w.exercises.some(pe => pe.name.toLowerCase() === ex.name.toLowerCase()));
       
@@ -585,15 +693,18 @@ function startWorkout(planId) {
       return {
         name: ex.name,
         restTime: ex.rest || 90,
-        sets: setsData
+        sets: setsData,
+        // Progression fields copied for history logging
+        exercise_type: ex.exercise_type || 'compound',
+        target_rep_min: ex.target_rep_min || 8,
+        target_rep_max: ex.target_rep_max || 12,
+        available_weights: ex.available_weights || []
       };
     })
   };
 
-  // UI rendering
   renderWorkoutView();
 
-  // Reset & Start Workout Clock
   workoutSecondsElapsed = 0;
   document.getElementById('workout-duration-clock').innerText = "00:00";
   
@@ -702,7 +813,6 @@ window.toggleSetCheck = function(btnEl) {
     setObj.weight = parseFloat(weightInput.value);
     setObj.reps = parseInt(rowEl.querySelector('.set-reps').value);
 
-    // Trigger Rest Timer
     const exObj = state.activeWorkout.exercises[exIdx];
     if (exObj.restTime > 0) {
       triggerRestTimer(exObj.name, `Satz ${setObj.setNumber} abgeschlossen`, exObj.restTime);
@@ -738,6 +848,9 @@ function finishWorkout() {
 
   if (workoutDurationInterval) clearInterval(workoutDurationInterval);
 
+  // Calculate average rest time actually logged
+  const avgRest = state.activeWorkout.exercises.reduce((sum, e) => sum + e.restTime, 0) / state.activeWorkout.exercises.length;
+
   const newWorkoutRecord = {
     id: `workout-record-${Date.now()}`,
     planId: state.activeWorkout.planId,
@@ -745,6 +858,7 @@ function finishWorkout() {
     splitName: state.activeWorkout.splitName,
     date: new Date().toISOString(),
     durationMinutes: Math.max(1, Math.round(workoutSecondsElapsed / 60)),
+    avgRestSeconds: avgRest,
     exercises: state.activeWorkout.exercises.map(ex => {
       return {
         name: ex.name,
@@ -857,7 +971,6 @@ function adjustTimerSeconds(amount) {
 function handleTimerExpiration() {
   pauseTimerCountdown();
   
-  // Play soft tone ONLY if sound is enabled in Settings!
   if (state.settings.soundEnabled) {
     const audio = document.getElementById('audio-timer-alert');
     if (audio) {
@@ -865,7 +978,6 @@ function handleTimerExpiration() {
     }
   }
 
-  // Trigger vibration
   if ('vibrate' in navigator) {
     navigator.vibrate([200, 100, 200]);
   }
@@ -882,10 +994,8 @@ function closeTimerSheet() {
 
 // --- OPTIONS / SETTINGS VIEW CONTROLLER ---
 function renderSettingsView() {
-  // Sound Toggle
   document.getElementById('toggle-sound').checked = state.settings.soundEnabled;
 
-  // Weight Logs Mini Table
   const listContainer = document.getElementById('weight-history-list');
   const title = document.getElementById('weight-logs-title');
   listContainer.innerHTML = '';
@@ -895,7 +1005,6 @@ function renderSettingsView() {
     listContainer.innerHTML = `<div style="padding:14px; text-align:center; color:var(--text-secondary); font-size:14px;">Noch kein Gewicht eingetragen</div>`;
   } else {
     title.classList.remove('hidden');
-    // Show last 4 records
     const sortedWeights = [...state.weightHistory].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
     
     sortedWeights.forEach(log => {
@@ -939,10 +1048,7 @@ function exportToCSV() {
     return;
   }
 
-  // Define columns
   let csvContent = "Datum,Trainings-Programm (Split),Plan-Name,Uebung,Satz,Gewicht_kg,Wiederholungen\n";
-
-  // Sort history chronologically
   const sortedHistory = [...state.history].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   sortedHistory.forEach(workout => {
@@ -952,7 +1058,6 @@ function exportToCSV() {
 
     workout.exercises.forEach(ex => {
       ex.sets.forEach(set => {
-        // Escaping comma values in string names
         const cleanSplit = splitName.replace(/"/g, '""');
         const cleanPlan = planName.replace(/"/g, '""');
         const cleanEx = ex.name.replace(/"/g, '""');
@@ -962,13 +1067,12 @@ function exportToCSV() {
     });
   });
 
-  // Create Blob and trigger direct browser download
-  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // \uFEFF is UTF-8 BOM so Excel opens German letters cleanly
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   
   link.setAttribute("href", url);
-  link.setAttribute("download", `FitTracker_Rohdaten_${new Date().toISOString().slice(0,10)}.csv`);
+  link.setAttribute("download", `IRONPROGRESS_Rohdaten_${new Date().toISOString().slice(0,10)}.csv`);
   link.style.visibility = 'hidden';
   
   document.body.appendChild(link);
@@ -977,26 +1081,22 @@ function exportToCSV() {
 }
 
 function loadDeveloperMockData() {
-  if (confirm('Möchtest du wirklich professionelle Beispieldaten für Pläne, Trainingsverlauf und Körpergewicht laden? Deine aktuellen Daten bleiben dabei erhalten oder werden ergänzt.')) {
-    // Overwrite/merge plans
+  if (confirm('Möchtest du wirklich professionelle Beispieldaten laden? Deine aktuellen Daten bleiben dabei erhalten oder werden ergänzt.')) {
     MOCK_PLANS.forEach(mockP => {
       if (!state.plans.some(p => p.name.toLowerCase() === mockP.name.toLowerCase())) {
         state.plans.push(mockP);
       }
     });
 
-    // Merge mock history
     const mockHist = generateMockHistory();
     state.history = [...state.history, ...mockHist];
 
-    // Merge mock weight history
     const mockWeight = generateMockWeightHistory();
     state.weightHistory = [...state.weightHistory, ...mockWeight];
 
     saveToLocalStorage();
-    alert('Beispieldaten erfolgreich geladen! Gehe in die Statistiken, um die fertigen Diagramme anzusehen! 📊');
+    alert('Beispieldaten erfolgreich geladen! Gehe in die Statistiken, um die fertigen Diagramme und deinen Progressions-Coach anzusehen! 📊');
     
-    // Refresh & redirect to stats to show off
     renderHome();
     showView('stats', 'Statistiken');
   }
@@ -1018,6 +1118,179 @@ function resetApp() {
   }
 }
 
+// --- DIAGNOSTIC TEST RUNNER ---
+function triggerDiagnostics() {
+  const container = document.getElementById('diagnostics-results-container');
+  const logs = document.getElementById('diagnostics-logs');
+  
+  container.classList.remove('hidden');
+  logs.innerHTML = '';
+
+  const testResults = ProgressionService.runDiagnostics();
+
+  testResults.forEach(res => {
+    const card = document.createElement('div');
+    card.className = 'diagnostics-log-card';
+    
+    let statusBadgeColor = "var(--text-secondary)";
+    if (res.analysis.status === "increase_recommended") statusBadgeColor = "var(--color-success)";
+    else if (res.analysis.status === "cooldown_active" || res.analysis.status === "insufficient_data") statusBadgeColor = "var(--color-primary)";
+    else if (res.analysis.status === "target_not_reached" || res.analysis.status === "no_positive_trend" || res.analysis.status === "positive_trend_but_jump_too_large") statusBadgeColor = "var(--color-warning)";
+    
+    card.innerHTML = `
+      <div class="diagnostics-log-header">
+        <span>Szenario: ${res.scenario}</span>
+      </div>
+      <div style="font-size: 11px; margin-bottom: 6px; font-weight:700;">
+        Status: <span style="color:${statusBadgeColor};">${res.analysis.status.toUpperCase()}</span>
+      </div>
+      <div style="font-size: 11.5px; line-height: 1.35; color:#ffffff; margin-bottom: 8px; font-family:sans-serif; background:rgba(255,255,255,0.03); padding:8px; border-radius:4px; border-left:3px solid ${statusBadgeColor}">
+        <strong>Coach-Empfehlung:</strong> "${res.analysis.userMessage}"
+      </div>
+      <div class="diagnostics-log-body">
+JSON-Ergebnis:
+${JSON.stringify(res.analysis, null, 2)}
+      </div>
+    `;
+    logs.appendChild(card);
+  });
+
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// --- RENDERING THE PROGRESSION COACH SEGMENT ---
+function renderProgressionCoach() {
+  const listContainer = document.getElementById('progression-coach-list');
+  listContainer.innerHTML = '';
+
+  const planExercises = [];
+  const seen = new Set();
+  
+  state.plans.forEach(plan => {
+    plan.exercises.forEach(ex => {
+      if (!seen.has(ex.name.toLowerCase())) {
+        seen.add(ex.name.toLowerCase());
+        planExercises.push({
+          name: ex.name,
+          planExercise: ex
+        });
+      }
+    });
+  });
+
+  if (planExercises.length === 0) {
+    listContainer.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📈</div>
+        <h3>Keine Übungen vorhanden</h3>
+        <p>Erstelle zuerst einen Trainingsplan mit Übungen, um Empfehlungen zu erhalten.</p>
+      </div>
+    `;
+    return;
+  }
+
+  planExercises.forEach(item => {
+    // Run Progression Analysis!
+    const analysis = ProgressionService.analyze(item.name, state.history, item.planExercise);
+
+    const card = document.createElement('div');
+    card.className = 'plan-card';
+    card.style.cursor = 'default';
+    
+    let badgeClass = "neutral";
+    let badgeText = "Konsolidierung";
+    let avatar = "👨‍💻";
+    let bubbleClass = "neutral";
+
+    if (analysis.status === "increase_recommended") {
+      badgeClass = "positive";
+      badgeText = "Progression";
+      avatar = "💪";
+      bubbleClass = "increase_recommended";
+    } else if (analysis.status === "positive_trend_but_jump_too_large") {
+      badgeClass = "positive";
+      badgeText = "Limit erreicht";
+      avatar = "⚠️";
+      bubbleClass = "positive_trend_but_jump_too_large";
+    } else if (analysis.status === "cooldown_active") {
+      badgeClass = "neutral";
+      badgeText = "Cooldown";
+      avatar = "🧘";
+      bubbleClass = "cooldown_active";
+    } else if (analysis.status === "target_not_reached") {
+      badgeClass = "neutral";
+      badgeText = "Rep-Aufbau";
+      avatar = "🏋️";
+      bubbleClass = "target_not_reached";
+    } else if (analysis.status === "no_positive_trend") {
+      badgeClass = "neutral";
+      badgeText = "Stagnation";
+      avatar = "📋";
+      bubbleClass = "no_positive_trend";
+    } else if (analysis.status === "insufficient_data") {
+      badgeClass = "neutral";
+      badgeText = "Vorbereitung";
+      avatar = "📊";
+      bubbleClass = "insufficient_data";
+    }
+
+    let volumeHistoryHTML = "Keine Daten";
+    if (analysis.trendWindowSessions && analysis.trendWindowSessions.length > 0) {
+      volumeHistoryHTML = analysis.trendWindowSessions.map(s => `${s.volume} kg`).join(" ➔ ");
+    }
+
+    const typeLabels = {
+      compound: "Grundübung",
+      machine_compound: "Maschine",
+      isolation: "Isolation",
+      small_isolation: "Kl. Isolation",
+      bodyweight: "Bodyweight",
+      assisted_bodyweight: "Ass. BW"
+    };
+
+    const friendlyType = typeLabels[item.planExercise.exercise_type] || "Grundübung";
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:0.5px solid var(--border-color); padding-bottom:8px;">
+        <h3 style="margin:0; font-size:16px; font-weight:700;">${item.name}</h3>
+        <span class="trend-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      
+      <div class="coach-metrics-grid" style="margin-top:0; margin-bottom:8px;">
+        <div class="coach-metric-item">
+          <span class="coach-metric-val">${analysis.currentWeight !== undefined ? analysis.currentWeight : '0'} kg</span>
+          <span class="coach-metric-label">Gewicht</span>
+        </div>
+        <div class="coach-metric-item">
+          <span class="coach-metric-val">${item.planExercise.target_rep_min || 8}-${item.planExercise.target_rep_max || 12}</span>
+          <span class="coach-metric-label">Ziel-Reps</span>
+        </div>
+        <div class="coach-metric-item">
+          <span class="coach-metric-val" style="font-size:10px;">${friendlyType}</span>
+          <span class="coach-metric-label">Typ</span>
+        </div>
+      </div>
+
+      <div style="margin-top:10px; font-size:11px; color:var(--text-secondary); text-align:center;">
+        <strong>Volumentrend:</strong> ${volumeHistoryHTML}
+      </div>
+
+      <!-- Coach speech bubble -->
+      <div class="coach-bubble">
+        <div class="coach-avatar">${avatar}</div>
+        <div class="coach-speech ${bubbleClass}">
+          ${formatCoachMessage(analysis.userMessage)}
+        </div>
+      </div>
+    `;
+    listContainer.appendChild(card);
+  });
+}
+
+function formatCoachMessage(msg) {
+  return msg.replace(/(\d+(\.\d+)?\s*kg)/g, "<strong>$1</strong>");
+}
+
 // --- STATISTICS ENGINE & CHARTING ---
 let chartOverallInstance = null;
 let chartPlanInstance = null;
@@ -1025,7 +1298,6 @@ let chartExerciseInstance = null;
 let chartWeightInstance = null;
 
 function initStatsView() {
-  // Populate Plan Selector
   const planSelect = document.getElementById('filter-plan-select');
   planSelect.innerHTML = '';
   state.plans.forEach(p => {
@@ -1035,7 +1307,6 @@ function initStatsView() {
     planSelect.appendChild(opt);
   });
 
-  // Populate Exercise Selector
   const exerciseSelect = document.getElementById('filter-exercise-select');
   exerciseSelect.innerHTML = '';
   
@@ -1064,7 +1335,7 @@ function initStatsView() {
 
 function updateActiveSegmentStats() {
   const activeSegmentBtn = document.querySelector('.segment-btn.active');
-  const segment = activeSegmentBtn.dataset.segment; // 'overall', 'plans', or 'exercises'
+  const segment = activeSegmentBtn.dataset.segment;
   const timeRange = document.getElementById('filter-time-range').value;
 
   const filteredHistory = filterHistoryByTimeRange(timeRange);
@@ -1085,6 +1356,8 @@ function updateActiveSegmentStats() {
     renderPlanStats(filteredHistory);
   } else if (segment === 'exercises') {
     renderExerciseStats(filteredHistory);
+  } else if (segment === 'progression') {
+    renderProgressionCoach();
   }
 }
 
@@ -1184,7 +1457,6 @@ function renderWeightProgressionStats(timeRangeStr) {
 
   if (chartWeightInstance) chartWeightInstance.destroy();
 
-  // Filter weight records
   let filteredWeight = [...state.weightHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
   
   if (timeRangeStr !== 'all') {
@@ -1404,7 +1676,6 @@ function renderExerciseStats(filteredHistory) {
 
 // --- EVENT LISTENERS SETUP ---
 function setupEventListeners() {
-  // Tab Bar Switching
   document.querySelectorAll('.tab-item').forEach(item => {
     item.addEventListener('click', () => {
       const tab = item.dataset.tab;
@@ -1418,13 +1689,11 @@ function setupEventListeners() {
     });
   });
 
-  // Home navigation button
   document.getElementById('btn-to-creator').onclick = () => {
     resetCreatorForm();
     showView('creator', 'Neuer Plan');
   };
 
-  // Creator View actions
   document.getElementById('btn-add-exercise').onclick = () => addExerciseField();
   document.getElementById('btn-cancel-creator').onclick = () => {
     resetCreatorForm();
@@ -1432,11 +1701,9 @@ function setupEventListeners() {
   };
   document.getElementById('creator-form').onsubmit = saveNewPlan;
 
-  // Active Workout View actions
   document.getElementById('btn-cancel-workout').onclick = cancelWorkout;
   document.getElementById('btn-finish-workout').onclick = finishWorkout;
 
-  // Rest Timer adjust & skip buttons
   document.getElementById('btn-timer-toggle').onclick = () => {
     if (state.timer.isRunning) {
       pauseTimerCountdown();
@@ -1450,12 +1717,10 @@ function setupEventListeners() {
   document.getElementById('btn-timer-skip').onclick = closeTimerSheet;
   document.getElementById('timer-backdrop').onclick = closeTimerSheet;
 
-  // Stats filters
   document.getElementById('filter-time-range').onchange = updateActiveSegmentStats;
   document.getElementById('filter-plan-select').onchange = updateActiveSegmentStats;
   document.getElementById('filter-exercise-select').onchange = updateActiveSegmentStats;
 
-  // Segment Buttons Switcher
   document.querySelectorAll('.segment-btn').forEach(btn => {
     btn.onclick = (e) => {
       document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
@@ -1464,13 +1729,17 @@ function setupEventListeners() {
     };
   });
 
-  // Settings Actions
   document.getElementById('btn-save-weight').onclick = logBodyWeight;
   document.getElementById('btn-export-csv').onclick = exportToCSV;
   document.getElementById('btn-load-mockdata').onclick = loadDeveloperMockData;
   document.getElementById('btn-reset-app').onclick = resetApp;
+  
+  // Test diagnostics activation
+  document.getElementById('btn-run-diagnostics').onclick = triggerDiagnostics;
+  document.getElementById('btn-close-diagnostics').onclick = () => {
+    document.getElementById('diagnostics-results-container').classList.add('hidden');
+  };
 
-  // Sound toggle event
   document.getElementById('toggle-sound').onchange = (e) => {
     state.settings.soundEnabled = e.target.checked;
     saveToLocalStorage();
@@ -1481,17 +1750,12 @@ function setupEventListeners() {
 window.onload = () => {
   loadFromLocalStorage();
 
-  // Pre-populate creator input structures
   setupCreatorView();
-
-  // Setup dynamic listeners
   setupEventListeners();
 
-  // Render first screen
   renderHome();
   showView('home', 'Mein Training');
   
-  // Register service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => {
       console.log('Service Worker registration skipped: ', err);

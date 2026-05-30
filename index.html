@@ -150,6 +150,7 @@
           <button class="segment-btn active" data-segment="overall">Gesamt</button>
           <button class="segment-btn" data-segment="plans">Pläne</button>
           <button class="segment-btn" data-segment="exercises">Übungen</button>
+          <button class="segment-btn" data-segment="progression">Coach</button>
         </div>
 
         <!-- Scaling Selectors (Time Range) -->
@@ -248,6 +249,16 @@
             <canvas id="chart-exercise-progress"></canvas>
           </div>
         </div>
+
+        <!-- SEGMENT: PROGRESSION COACH -->
+        <div id="stats-segment-progression" class="stats-segment-content">
+          <div class="settings-desc" style="margin-bottom:20px; font-size:14px; text-align:center; line-height:1.4;">
+            Dein persönlicher Progressions-Coach analysiert dein Volumen und deine Wiederholungen der letzten Einheiten, um dir optimale Gewichtsänderungen vorzuschlagen.
+          </div>
+          <div id="progression-coach-list" class="plans-list">
+            <!-- Dynamisch gerendert per JS -->
+          </div>
+        </div>
       </section>
 
       <!-- VIEW: SETTINGS -->
@@ -299,6 +310,25 @@
           <div class="settings-buttons-grid">
             <button id="btn-load-mockdata" class="btn-secondary-pill compact">Beispieldaten laden</button>
             <button id="btn-reset-app" class="btn-text-danger-border">App zurücksetzen</button>
+          </div>
+        </div>
+
+        <!-- Progressions-Diagnose (Test-Center) -->
+        <div class="settings-card">
+          <h3>Progressions-Diagnose</h3>
+          <p class="settings-desc">Simuliere und verifiziere alle 8 Kernszenarien des Double-Progression-Algorithmus live in der App.</p>
+          <button id="btn-run-diagnostics" class="btn-primary-pill" style="margin-bottom:15px;">
+            🔬 Diagnose-Tests ausführen
+          </button>
+          
+          <div id="diagnostics-results-container" class="diagnostics-results-container hidden" style="background-color:var(--bg-tertiary); border-radius:var(--border-radius-md); padding:16px; border:1.5px solid var(--border-color); max-height: 400px; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:0.5px solid var(--border-color); padding-bottom:8px;">
+              <h4 style="font-size:14px; font-weight:700;">Simulationsergebnisse</h4>
+              <button id="btn-close-diagnostics" class="btn-text-link" style="font-size:13px;">Schließen</button>
+            </div>
+            <div id="diagnostics-logs" class="plans-list" style="gap:10px;">
+              <!-- Testergebnisse werden hier ausgegeben -->
+            </div>
           </div>
         </div>
       </section>
@@ -374,6 +404,7 @@
   <!-- Sound for completed timer -->
   <audio id="audio-timer-alert" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-500.wav" preload="auto"></audio>
 
+  <script src="progression.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
