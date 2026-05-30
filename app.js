@@ -632,6 +632,14 @@ function editPlan(planId) {
   showView('creator', 'Plan bearbeiten');
 }
 
+function deletePlan(planId) {
+  if (confirm('Möchtest du diesen Trainingsplan wirklich löschen?')) {
+    state.plans = state.plans.filter(p => p.id !== planId);
+    saveToLocalStorage();
+    renderHome();
+  }
+}
+
 function saveNewPlan() {
   const editId = document.getElementById('creator-edit-id').value;
   const planName = document.getElementById('plan-name').value.trim();
@@ -1023,14 +1031,52 @@ function adjustTimerSeconds(amount) {
   }
 }
 
+function playTimerAlertSound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    
+    // Tone 1 (High pitch, sine wave, A5 note)
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(880, now);
+    gain1.gain.setValueAtTime(0, now);
+    gain1.gain.linearRampToValueAtTime(0.2, now + 0.05);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.4);
+    
+    // Tone 2 (Slightly delayed, higher pitch, sine wave, C6 note)
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(1046.50, now + 0.12);
+    gain2.gain.setValueAtTime(0, now + 0.12);
+    gain2.gain.linearRampToValueAtTime(0.2, now + 0.17);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.47);
+    
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.52);
+  } catch (e) {
+    console.log("Web Audio API synthesis failed, falling back to audio element:", e);
+    const audio = document.getElementById('audio-timer-alert');
+    if (audio) {
+      audio.play().catch(err => console.log('Audio element playback blocked:', err));
+    }
+  }
+}
+
 function handleTimerExpiration() {
   pauseTimerCountdown();
   
   if (state.settings.soundEnabled) {
-    const audio = document.getElementById('audio-timer-alert');
-    if (audio) {
-      audio.play().catch(e => console.log('Audio playback prevented by browser: ', e));
-    }
+    playTimerAlertSound();
   }
 
   if ('vibrate' in navigator) {
@@ -1764,8 +1810,29 @@ function renderExerciseStats(filteredHistory) {
   });
 }
 
+function unlockUserAudio() {
+  const audio = document.getElementById('audio-timer-alert');
+  if (audio) {
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => {});
+  }
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  } catch (e) {}
+  document.removeEventListener('click', unlockUserAudio);
+  document.removeEventListener('touchstart', unlockUserAudio);
+}
+
 // --- EVENT LISTENERS SETUP ---
 function setupEventListeners() {
+  document.addEventListener('click', unlockUserAudio);
+  document.addEventListener('touchstart', unlockUserAudio);
+  
   document.querySelectorAll('.tab-item').forEach(item => {
     item.addEventListener('click', () => {
       const tab = item.dataset.tab;
