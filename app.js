@@ -11,9 +11,11 @@ const state = {
   weightHistory: [],
   settings: {
     soundEnabled: true,
+    timerSoundType: "sleek",
     globalPlates: [1.25, 2.5, 5, 10, 15, 20],
     globalAvailableWeights: []
   },
+  audioCtx: null,
   activeWorkout: null,
   timer: {
     intervalId: null,
@@ -225,6 +227,9 @@ function loadFromLocalStorage() {
     state.settings = JSON.parse(settingsStr);
     if (!state.settings.globalPlates || state.settings.globalPlates.length === 0) {
       state.settings.globalPlates = [1.25, 2.5, 5, 10, 15, 20];
+    }
+    if (!state.settings.timerSoundType) {
+      state.settings.timerSoundType = "sleek";
     }
     state.settings.globalAvailableWeights = generateWeightsFromPlates(state.settings.globalPlates);
   } else {
@@ -1031,43 +1036,120 @@ function adjustTimerSeconds(amount) {
   }
 }
 
-function playTimerAlertSound() {
-  try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = audioCtx.currentTime;
-    
-    // Tone 1 (High pitch, sine wave, A5 note)
-    const osc1 = audioCtx.createOscillator();
-    const gain1 = audioCtx.createGain();
+function playTimerAlertSound(soundType = state.settings.timerSoundType || "sleek") {
+  let ctx = state.audioCtx;
+  if (!ctx) {
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      state.audioCtx = ctx;
+    } catch (e) {
+      console.log("AudioContext fallback creation failed:", e);
+    }
+  }
+
+  if (!ctx) {
+    playFallbackAudio();
+    return;
+  }
+
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(() => {
+      triggerBeeps(ctx, soundType);
+    }).catch(e => {
+      console.log("AudioContext resume failed:", e);
+      playFallbackAudio();
+    });
+  } else {
+    triggerBeeps(ctx, soundType);
+  }
+}
+
+function playFallbackAudio() {
+  const audio = document.getElementById('audio-timer-alert');
+  if (audio) {
+    audio.play().catch(err => console.log('Audio element playback blocked:', err));
+  }
+}
+
+function triggerBeeps(ctx, soundType) {
+  const now = ctx.currentTime;
+  
+  if (soundType === 'sleek') {
+    // 1. Sleek Beep (iOS-Style) - Dual Tone
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.setValueAtTime(880, now); // A5 note
     gain1.gain.setValueAtTime(0, now);
     gain1.gain.linearRampToValueAtTime(0.2, now + 0.05);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    
     osc1.connect(gain1);
-    gain1.connect(audioCtx.destination);
+    gain1.connect(ctx.destination);
     osc1.start(now);
     osc1.stop(now + 0.4);
-    
-    // Tone 2 (Slightly delayed, higher pitch, sine wave, C6 note)
-    const osc2 = audioCtx.createOscillator();
-    const gain2 = audioCtx.createGain();
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1046.50, now + 0.12);
+    osc2.frequency.setValueAtTime(1046.50, now + 0.12); // C6 note
     gain2.gain.setValueAtTime(0, now + 0.12);
     gain2.gain.linearRampToValueAtTime(0.2, now + 0.17);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.47);
-    
     osc2.connect(gain2);
-    gain2.connect(audioCtx.destination);
+    gain2.connect(ctx.destination);
     osc2.start(now + 0.12);
     osc2.stop(now + 0.52);
-  } catch (e) {
-    console.log("Web Audio API synthesis failed, falling back to audio element:", e);
-    const audio = document.getElementById('audio-timer-alert');
-    if (audio) {
-      audio.play().catch(err => console.log('Audio element playback blocked:', err));
+    
+  } else if (soundType === 'classic') {
+    // 2. Classic Digital Watch (Double Beep)
+    const times = [0, 0.12, 0.30, 0.42];
+    times.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(987.77, now + t); // B5 note
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(0.25, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + t + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.09);
+    });
+
+  } else if (soundType === 'zen') {
+    // 3. Zen Chime (Relaxing Ascending Arpeggio)
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    notes.forEach((freq, idx) => {
+      const t = idx * 0.15;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + t);
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(0.18, now + t + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + t + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.5);
+    });
+
+  } else if (soundType === 'vintage') {
+    // 4. Alarm Bell (Rapid pulsating beeps)
+    for (let i = 0; i < 5; i++) {
+      const t = i * 0.08;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1200, now + t);
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(0.2, now + t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + t + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.07);
     }
   }
 }
@@ -1096,6 +1178,11 @@ function closeTimerSheet() {
 // --- OPTIONS / SETTINGS VIEW CONTROLLER ---
 function renderSettingsView() {
   document.getElementById('toggle-sound').checked = state.settings.soundEnabled;
+
+  const soundSelect = document.getElementById('select-timer-sound');
+  if (soundSelect && state.settings.timerSoundType) {
+    soundSelect.value = state.settings.timerSoundType;
+  }
 
   const globalWeightsInput = document.getElementById('input-global-weights');
   if (globalWeightsInput && state.settings.globalPlates) {
@@ -1819,13 +1906,15 @@ function unlockUserAudio() {
     }).catch(() => {});
   }
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+    if (!state.audioCtx) {
+      state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-  } catch (e) {}
-  document.removeEventListener('click', unlockUserAudio);
-  document.removeEventListener('touchstart', unlockUserAudio);
+    if (state.audioCtx && state.audioCtx.state === 'suspended') {
+      state.audioCtx.resume();
+    }
+  } catch (e) {
+    console.log("AudioContext unlock failed:", e);
+  }
 }
 
 // --- EVENT LISTENERS SETUP ---
@@ -1901,6 +1990,18 @@ function setupEventListeners() {
   document.getElementById('toggle-sound').onchange = (e) => {
     state.settings.soundEnabled = e.target.checked;
     saveToLocalStorage();
+  };
+
+  document.getElementById('select-timer-sound').onchange = (e) => {
+    state.settings.timerSoundType = e.target.value;
+    saveToLocalStorage();
+  };
+
+  document.getElementById('btn-preview-sound').onclick = () => {
+    unlockUserAudio();
+    setTimeout(() => {
+      playTimerAlertSound(state.settings.timerSoundType);
+    }, 50);
   };
 }
 

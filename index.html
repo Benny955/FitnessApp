@@ -282,7 +282,7 @@
         <!-- Preferences Card -->
         <div class="settings-card">
           <h3>Einstellungen & Signale</h3>
-          <div class="settings-row-item">
+          <div class="settings-row-item" style="border-bottom: 0.5px solid var(--border-color); padding-bottom: 12px; margin-bottom: 12px;">
             <div class="settings-item-label">
               <h4>Signalton & Vibration</h4>
               <p>Ton abspielen, wenn die Pausenzeit abgelaufen ist.</p>
@@ -292,6 +292,18 @@
               <span class="ios-switch-slider"></span>
             </label>
           </div>
+          
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="select-timer-sound" style="font-size: 11px;">Ton-Charakter auswählen</label>
+            <select id="select-timer-sound" class="ios-select" style="padding: 10px 30px 10px 12px; font-size:13px; width: 100%;">
+              <option value="sleek">Sleek Beep (iOS-Style)</option>
+              <option value="classic">Classic (Digital-Wecker)</option>
+              <option value="zen">Zen Chime (Arpeggio)</option>
+              <option value="vintage">Alarm Bell (Pulsierend)</option>
+            </select>
+          </div>
+          
+          <button id="btn-preview-sound" class="btn-secondary-pill compact">➔ Ton testen (Vorschau)</button>
         </div>
 
         <!-- Studio Equipment Card -->
