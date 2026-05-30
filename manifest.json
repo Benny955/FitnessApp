@@ -1,6 +1,6 @@
 {
-  "name": "iOS Fitness Tracker",
-  "short_name": "FitTracker",
+  "name": "IRONPROGRESS",
+  "short_name": "IRONPROGRESS",
   "description": "Ein eleganter, iOS-optimierter Trainingsplaner und Workout-Logger mit intelligenter Stoppuhr und detaillierter Statistik.",
   "start_url": "index.html",
   "display": "standalone",
