@@ -1064,7 +1064,7 @@ function initStatsView() {
 
 function updateActiveSegmentStats() {
   const activeSegmentBtn = document.querySelector('.segment-btn.active');
-  const segment = activeSegmentBtn.dataset.segment;
+  const segment = activeSegmentBtn.dataset.segment; // 'overall', 'plans', or 'exercises'
   const timeRange = document.getElementById('filter-time-range').value;
 
   const filteredHistory = filterHistoryByTimeRange(timeRange);
@@ -1072,8 +1072,8 @@ function updateActiveSegmentStats() {
   document.querySelectorAll('.stats-segment-content').forEach(el => {
     el.classList.remove('active');
   });
-  const targetId = segment === 'overall' ? 'stats-segment-overall' : `stats-segment-${segment}s`;
-  const targetEl = document.getElementById(targetId);
+  
+  const targetEl = document.getElementById(`stats-segment-${segment}`);
   if (targetEl) {
     targetEl.classList.add('active');
   }
@@ -1081,9 +1081,9 @@ function updateActiveSegmentStats() {
   if (segment === 'overall') {
     renderOverallStats(filteredHistory);
     renderWeightProgressionStats(timeRange);
-  } else if (segment === 'plan') {
+  } else if (segment === 'plans') {
     renderPlanStats(filteredHistory);
-  } else if (segment === 'exercise') {
+  } else if (segment === 'exercises') {
     renderExerciseStats(filteredHistory);
   }
 }
@@ -1140,17 +1140,24 @@ function renderOverallStats(filteredHistory) {
     return vol;
   });
 
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(10, 132, 255, 0.25)');
+  gradient.addColorStop(1, 'rgba(10, 132, 255, 0.0)');
+
   chartOverallInstance = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels: labels,
       datasets: [{
         label: 'Workout-Volumen (kg)',
         data: volumePerWorkout,
-        backgroundColor: 'rgba(10, 132, 255, 0.4)',
         borderColor: '#0a84ff',
-        borderWidth: 1.5,
-        borderRadius: 6,
+        borderWidth: 3,
+        pointBackgroundColor: '#0a84ff',
+        pointHoverRadius: 6,
+        tension: 0.35,
+        fill: true,
+        backgroundColor: gradient
       }]
     },
     options: {

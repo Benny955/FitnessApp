@@ -948,6 +948,8 @@ body {
   padding: 16px;
   border: 1px solid var(--border-color);
   margin-bottom: 20px;
+  height: 220px; /* Fixed height for beautiful compact iOS sizing */
+  position: relative; /* Required for responsive Chart.js canvas */
 }
 
 .chart-container h3 {
