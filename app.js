@@ -11,7 +11,8 @@ const state = {
   weightHistory: [],
   settings: {
     soundEnabled: true,
-    globalAvailableWeights: [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150]
+    globalPlates: [1.25, 2.5, 5, 10, 15, 20],
+    globalAvailableWeights: []
   },
   activeWorkout: null,
   timer: {
@@ -191,6 +192,26 @@ function saveToLocalStorage() {
   localStorage.setItem('ironprogress_v2_settings', JSON.stringify(state.settings));
 }
 
+function generateWeightsFromPlates(plates) {
+  if (!plates || plates.length === 0) {
+    return [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150];
+  }
+  
+  const sortedPlates = [...plates].map(Number).filter(p => !isNaN(p) && p > 0).sort((a, b) => a - b);
+  if (sortedPlates.length === 0) {
+    return [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150];
+  }
+  
+  const minPlate = sortedPlates[0];
+  const step = 2 * minPlate;
+  
+  const generatedWeights = [];
+  for (let w = step; w <= 250; w += step) {
+    generatedWeights.push(w);
+  }
+  return generatedWeights;
+}
+
 function loadFromLocalStorage() {
   const plansStr = localStorage.getItem('ironprogress_v2_plans');
   const histStr = localStorage.getItem('ironprogress_v2_history');
@@ -202,9 +223,13 @@ function loadFromLocalStorage() {
   if (weightStr) state.weightHistory = JSON.parse(weightStr);
   if (settingsStr) {
     state.settings = JSON.parse(settingsStr);
-    if (!state.settings.globalAvailableWeights || state.settings.globalAvailableWeights.length === 0) {
-      state.settings.globalAvailableWeights = [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150];
+    if (!state.settings.globalPlates || state.settings.globalPlates.length === 0) {
+      state.settings.globalPlates = [1.25, 2.5, 5, 10, 15, 20];
     }
+    state.settings.globalAvailableWeights = generateWeightsFromPlates(state.settings.globalPlates);
+  } else {
+    // Generate default weights
+    state.settings.globalAvailableWeights = generateWeightsFromPlates(state.settings.globalPlates);
   }
 }
 
@@ -1027,8 +1052,8 @@ function renderSettingsView() {
   document.getElementById('toggle-sound').checked = state.settings.soundEnabled;
 
   const globalWeightsInput = document.getElementById('input-global-weights');
-  if (globalWeightsInput && state.settings.globalAvailableWeights) {
-    globalWeightsInput.value = state.settings.globalAvailableWeights.join(', ');
+  if (globalWeightsInput && state.settings.globalPlates) {
+    globalWeightsInput.value = state.settings.globalPlates.join(', ');
   }
 
   const listContainer = document.getElementById('weight-history-list');
@@ -1082,19 +1107,21 @@ function saveGlobalWeights() {
   if (!input) return;
   
   const val = input.value;
-  const parsedWeights = val.split(',')
+  const parsedPlates = val.split(',')
     .map(w => parseFloat(w.trim()))
     .filter(w => !isNaN(w) && w > 0)
     .sort((a, b) => a - b);
     
-  if (parsedWeights.length === 0) {
-    alert('Bitte gib mindestens eine gültige Gewichtsstufe ein (z.B. 2.5, 5, 7.5).');
+  if (parsedPlates.length === 0) {
+    alert('Bitte gib mindestens eine gültige Hantelscheibengröße ein (z.B. 1.25, 2.5, 5).');
     return;
   }
   
-  state.settings.globalAvailableWeights = parsedWeights;
+  state.settings.globalPlates = parsedPlates;
+  state.settings.globalAvailableWeights = generateWeightsFromPlates(parsedPlates);
+  
   saveToLocalStorage();
-  alert('Globale Gewichtsstufen erfolgreich gespeichert! 🏋️');
+  alert('Studio-Ausstattung erfolgreich gespeichert! Die App berechnet deine Hantelkombinationen nun automatisch. 🏋️');
   
   if (document.querySelector('.tab-item.active').dataset.tab === 'stats') {
     updateActiveSegmentStats();
@@ -1168,7 +1195,11 @@ function resetApp() {
       state.plans = [];
       state.history = [];
       state.weightHistory = [];
-      state.settings = { soundEnabled: true };
+      state.settings = { 
+        soundEnabled: true, 
+        globalPlates: [1.25, 2.5, 5, 10, 15, 20],
+        globalAvailableWeights: [] 
+      };
       state.activeWorkout = null;
       
       alert('Die App wurde vollständig zurückgesetzt.');
