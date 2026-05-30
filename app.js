@@ -7,6 +7,10 @@
 const state = {
   plans: [],
   history: [],
+  weightHistory: [],
+  settings: {
+    soundEnabled: true
+  },
   activeWorkout: null,
   timer: {
     intervalId: null,
@@ -18,11 +22,12 @@ const state = {
   }
 };
 
-// --- MOCK DATA FOR PREMIUM FIRST-TIME EXPERIENCE ---
+// --- MOCK DATA FOR USER TESTING ---
 const MOCK_PLANS = [
   {
     id: "plan-push",
-    name: "Montag - Push (Brust, Trizeps, Schultern)",
+    name: "Push (Brust, Trizeps, Schultern)",
+    split: "5er Split",
     exercises: [
       { name: "Bankdrücken (Langhantel)", sets: 4, reps: 8, rest: 120 },
       { name: "Schrägbankdrücken (Kurzhantel)", sets: 3, reps: 10, rest: 90 },
@@ -32,12 +37,23 @@ const MOCK_PLANS = [
   },
   {
     id: "plan-pull",
-    name: "Donnerstag - Pull (Rücken, Bizeps)",
+    name: "Pull (Rücken, Bizeps)",
+    split: "5er Split",
     exercises: [
       { name: "Kreuzheben", sets: 3, reps: 5, rest: 180 },
       { name: "Klimmzüge", sets: 4, reps: 8, rest: 90 },
       { name: "Langhantelrudern", sets: 3, reps: 10, rest: 90 },
       { name: "Hammer Curls", sets: 3, reps: 12, rest: 60 }
+    ]
+  },
+  {
+    id: "plan-legs",
+    name: "Beine & Bauch",
+    split: "5er Split",
+    exercises: [
+      { name: "Kniebeugen", sets: 4, reps: 8, rest: 120 },
+      { name: "Beinstrecker", sets: 3, reps: 12, rest: 60 },
+      { name: "Wadenheben", sets: 4, reps: 15, rest: 60 }
     ]
   }
 ];
@@ -99,7 +115,8 @@ function generateMockHistory() {
     history.push({
       id: `workout-hist-${i}`,
       planId: plan.id,
-      planName: plan.name.split(" - ")[1] || plan.name,
+      planName: plan.name,
+      splitName: plan.split || 'Einzelne Pläne',
       date: workoutDate.toISOString(),
       durationMinutes: 45 + Math.floor(Math.random() * 15),
       exercises: workoutExercises
@@ -109,18 +126,40 @@ function generateMockHistory() {
   return history;
 }
 
+function generateMockWeightHistory() {
+  const list = [];
+  const now = new Date();
+  const weights = [84.5, 84.1, 83.6, 83.2, 82.9, 82.5];
+  
+  for (let i = 0; i < 6; i++) {
+    const d = new Date();
+    d.setDate(now.getDate() - (25 - i * 4));
+    list.push({
+      date: d.toISOString(),
+      weight: weights[i]
+    });
+  }
+  return list;
+}
+
 // --- LOCAL STORAGE HANDLING ---
 function saveToLocalStorage() {
   localStorage.setItem('fittracker_plans', JSON.stringify(state.plans));
   localStorage.setItem('fittracker_history', JSON.stringify(state.history));
+  localStorage.setItem('fittracker_weightHistory', JSON.stringify(state.weightHistory));
+  localStorage.setItem('fittracker_settings', JSON.stringify(state.settings));
 }
 
 function loadFromLocalStorage() {
   const plansStr = localStorage.getItem('fittracker_plans');
   const histStr = localStorage.getItem('fittracker_history');
+  const weightStr = localStorage.getItem('fittracker_weightHistory');
+  const settingsStr = localStorage.getItem('fittracker_settings');
   
   if (plansStr) state.plans = JSON.parse(plansStr);
   if (histStr) state.history = JSON.parse(histStr);
+  if (weightStr) state.weightHistory = JSON.parse(weightStr);
+  if (settingsStr) state.settings = JSON.parse(settingsStr);
 }
 
 // --- APP NAVIGATION ---
@@ -149,35 +188,42 @@ function showView(viewId, headerTitle) {
   } else if (viewId === 'creator') {
     actionBtn.classList.remove('hidden');
     actionBtn.innerText = "Abbrechen";
-    actionBtn.onclick = () => showView('home', 'Mein Training');
+    actionBtn.onclick = () => {
+      resetCreatorForm();
+      showView('home', 'Mein Training');
+    };
   } else {
     actionBtn.classList.add('hidden');
   }
 
   // Update Bottom Tab Bar highlight
   document.querySelectorAll('.tab-item').forEach(item => {
-    if (item.dataset.tab === viewId || (viewId === 'home' && item.dataset.tab === 'home')) {
+    if (item.dataset.tab === viewId) {
       item.classList.add('active');
     } else {
       item.classList.remove('active');
     }
   });
 
-  // Re-draw charts or populate selectors when entering Stats View
-  if (viewId === 'stats') {
+  // View-specific initializations
+  if (viewId === 'home') {
+    renderHome();
+  } else if (viewId === 'stats') {
     initStatsView();
+  } else if (viewId === 'settings') {
+    renderSettingsView();
   }
 }
 
 // --- HOME VIEW CONTROLLER ---
 function renderHome() {
-  const plansList = document.getElementById('plans-list');
+  const splitsContainer = document.getElementById('splits-container');
   const recentList = document.getElementById('recent-workouts-list');
   const recentHeader = document.querySelector('.recent-workouts-header');
   
-  // Render Plans
+  // Render Plans grouped by Splits (Überordner)
   if (state.plans.length === 0) {
-    plansList.innerHTML = `
+    splitsContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">💪</div>
         <h3>Keine Trainingspläne</h3>
@@ -185,36 +231,74 @@ function renderHome() {
         <button id="btn-empty-create" class="btn-primary-pill">+ Trainingsplan erstellen</button>
       </div>
     `;
-    document.getElementById('btn-empty-create').onclick = () => showView('creator', 'Neuer Plan');
+    document.getElementById('btn-empty-create').onclick = () => {
+      setupCreatorView();
+      showView('creator', 'Neuer Plan');
+    };
   } else {
-    plansList.innerHTML = '';
+    splitsContainer.innerHTML = '';
+    
+    // Group plans by their split name
+    const groupedPlans = {};
     state.plans.forEach(plan => {
-      const card = document.createElement('div');
-      card.className = 'plan-card';
-      
-      const exercisesHTML = plan.exercises.map(ex => 
-        `<span class="exercise-tag">${ex.name} (${ex.sets}x${ex.reps})</span>`
-      ).join('');
-
-      card.innerHTML = `
-        <div class="plan-card-header">
-          <h3>${plan.name}</h3>
-        </div>
-        <div class="plan-card-meta">${plan.exercises.length} Übungen &bull; Default Rest: 90s</div>
-        <div class="plan-card-exercises">
-          ${exercisesHTML}
-        </div>
-        <div class="plan-card-actions">
-          <button class="btn-delete-plan" data-id="${plan.id}">Löschen</button>
-          <button class="btn-start-plan" data-id="${plan.id}">Starten</button>
-        </div>
-      `;
-      plansList.appendChild(card);
+      const splitName = (plan.split && plan.split.trim()) ? plan.split.trim() : "Einzelne Pläne";
+      if (!groupedPlans[splitName]) {
+        groupedPlans[splitName] = [];
+      }
+      groupedPlans[splitName].push(plan);
     });
 
-    // Wire up start & delete buttons
+    // Render each split folder
+    Object.keys(groupedPlans).sort().forEach(splitName => {
+      const splitGroup = document.createElement('div');
+      splitGroup.className = 'split-group';
+      
+      const splitHeader = document.createElement('div');
+      splitHeader.className = 'split-header';
+      splitHeader.innerText = splitName;
+      splitGroup.appendChild(splitHeader);
+
+      const plansList = document.createElement('div');
+      plansList.className = 'plans-list';
+
+      groupedPlans[splitName].forEach(plan => {
+        const card = document.createElement('div');
+        card.className = 'plan-card';
+        
+        const exercisesHTML = plan.exercises.map(ex => 
+          `<span class="exercise-tag">${ex.name} (${ex.sets}x${ex.reps})</span>`
+        ).join('');
+
+        card.innerHTML = `
+          <div class="plan-card-header">
+            <h3>${plan.name}</h3>
+          </div>
+          <div class="plan-card-meta">${plan.exercises.length} Übungen</div>
+          <div class="plan-card-exercises">
+            ${exercisesHTML}
+          </div>
+          <div class="plan-card-actions">
+            <div class="plan-card-left-btns">
+              <button class="btn-edit-plan" data-id="${plan.id}">Bearbeiten</button>
+              <button class="btn-delete-plan" data-id="${plan.id}">Löschen</button>
+            </div>
+            <button class="btn-start-plan" data-id="${plan.id}">Starten</button>
+          </div>
+        `;
+        plansList.appendChild(card);
+      });
+
+      splitGroup.appendChild(plansList);
+      splitsContainer.appendChild(splitGroup);
+    });
+
+    // Wire up buttons
     document.querySelectorAll('.btn-start-plan').forEach(btn => {
       btn.onclick = (e) => startWorkout(e.target.dataset.id);
+    });
+
+    document.querySelectorAll('.btn-edit-plan').forEach(btn => {
+      btn.onclick = (e) => editPlan(e.target.dataset.id);
     });
 
     document.querySelectorAll('.btn-delete-plan').forEach(btn => {
@@ -237,7 +321,6 @@ function renderHome() {
       const date = new Date(work.date);
       const dateStr = date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
       
-      // Calculate total weight lifted in this workout
       let totalWeight = 0;
       work.exercises.forEach(ex => {
         ex.sets.forEach(set => {
@@ -263,7 +346,6 @@ function renderHome() {
     });
   }
 
-  // Update Summary Dashboard Widgets
   updateGlobalMetrics();
 }
 
@@ -279,7 +361,6 @@ function updateGlobalMetrics() {
     return;
   }
 
-  // Calculate workouts in last 7 days
   const now = new Date();
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(now.getDate() - 7);
@@ -287,7 +368,6 @@ function updateGlobalMetrics() {
   const weeklyWorkouts = state.history.filter(w => new Date(w.date) >= sevenDaysAgo);
   weeklyCountBadge.innerText = `${weeklyWorkouts.length} Workout${weeklyWorkouts.length === 1 ? '' : 's'}`;
 
-  // Volume & Duration (overall averages)
   let totalVolume = 0;
   let totalDuration = 0;
 
@@ -315,7 +395,7 @@ function deletePlan(planId) {
   }
 }
 
-// --- CREATOR VIEW CONTROLLER ---
+// --- CREATOR VIEW CONTROLLER (WITH EDIT FLOW) ---
 let exerciseFieldIndex = 0;
 
 function setupCreatorView() {
@@ -323,11 +403,19 @@ function setupCreatorView() {
   container.innerHTML = '';
   exerciseFieldIndex = 0;
   
-  // Start with 1 default exercise field
+  // Start with 1 default empty exercise field
   addExerciseField();
 }
 
-function addExerciseField() {
+function resetCreatorForm() {
+  document.getElementById('creator-edit-id').value = '';
+  document.getElementById('plan-name').value = '';
+  document.getElementById('plan-split').value = '';
+  document.getElementById('btn-save-plan').innerText = 'Plan speichern';
+  setupCreatorView();
+}
+
+function addExerciseField(name = '', sets = 3, reps = 10, rest = 90) {
   const container = document.getElementById('creator-exercises-container');
   const index = exerciseFieldIndex++;
 
@@ -341,27 +429,26 @@ function addExerciseField() {
     </div>
     
     <div class="form-group" style="margin-bottom: 12px;">
-      <input type="text" class="ex-name" placeholder="Name der Übung, z.B. Bankdrücken" required autocomplete="off">
+      <input type="text" class="ex-name" value="${name}" placeholder="Name der Übung, z.B. Bankdrücken" required autocomplete="off">
     </div>
 
     <div class="exercise-inputs-row">
       <div class="small-input-group">
         <label>Sätze</label>
-        <input type="number" class="ex-sets" value="3" min="1" max="15" required>
+        <input type="number" class="ex-sets" value="${sets}" min="1" max="15" required>
       </div>
       <div class="small-input-group">
         <label>Wiederholungen</label>
-        <input type="number" class="ex-reps" value="10" min="1" max="100" required>
+        <input type="number" class="ex-reps" value="${reps}" min="1" max="100" required>
       </div>
       <div class="small-input-group">
         <label>Pause (Sek.)</label>
-        <input type="number" class="ex-rest" value="90" min="0" max="600" required>
+        <input type="number" class="ex-rest" value="${rest}" min="0" max="600" required>
       </div>
     </div>
   `;
   container.appendChild(card);
   
-  // Smooth scroll to the newly added field
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
@@ -376,9 +463,32 @@ window.removeExerciseField = function(index) {
   }
 };
 
+function editPlan(planId) {
+  const plan = state.plans.find(p => p.id === planId);
+  if (!plan) return;
+
+  // Set form into edit mode
+  document.getElementById('creator-edit-id').value = plan.id;
+  document.getElementById('plan-name').value = plan.name;
+  document.getElementById('plan-split').value = plan.split || '';
+  document.getElementById('btn-save-plan').innerText = 'Änderungen speichern';
+
+  // Fill in exercises
+  const container = document.getElementById('creator-exercises-container');
+  container.innerHTML = '';
+  exerciseFieldIndex = 0;
+
+  plan.exercises.forEach(ex => {
+    addExerciseField(ex.name, ex.sets, ex.reps, ex.rest);
+  });
+
+  showView('creator', 'Plan bearbeiten');
+}
+
 function saveNewPlan() {
-  const nameInput = document.getElementById('plan-name');
-  const planName = nameInput.value.trim();
+  const editId = document.getElementById('creator-edit-id').value;
+  const planName = document.getElementById('plan-name').value.trim();
+  const planSplit = document.getElementById('plan-split').value.trim();
   
   if (!planName) return;
 
@@ -405,20 +515,28 @@ function saveNewPlan() {
     return;
   }
 
-  const newPlan = {
-    id: `plan-${Date.now()}`,
-    name: planName,
-    exercises: exercises
-  };
+  if (editId) {
+    // Edit existing plan
+    const planIndex = state.plans.findIndex(p => p.id === editId);
+    if (planIndex !== -1) {
+      state.plans[planIndex].name = planName;
+      state.plans[planIndex].split = planSplit;
+      state.plans[planIndex].exercises = exercises;
+    }
+  } else {
+    // Create new plan
+    const newPlan = {
+      id: `plan-${Date.now()}`,
+      name: planName,
+      split: planSplit,
+      exercises: exercises
+    };
+    state.plans.push(newPlan);
+  }
 
-  state.plans.push(newPlan);
   saveToLocalStorage();
+  resetCreatorForm();
   
-  // Reset Form
-  nameInput.value = '';
-  setupCreatorView();
-  
-  // Go back to home
   renderHome();
   showView('home', 'Mein Training');
 }
@@ -434,11 +552,11 @@ function startWorkout(planId) {
   // Initialize Active Workout State
   state.activeWorkout = {
     planId: plan.id,
-    planName: plan.name.split(" - ")[1] || plan.name,
+    planName: plan.name,
+    splitName: plan.split || 'Einzelne Pläne',
     startTime: new Date(),
     exercises: plan.exercises.map(ex => {
       const setsData = [];
-      // Grab historical weights for this exercise to pre-populate and wow the user!
       let historyWeight = 0;
       let historyReps = ex.reps;
 
@@ -458,8 +576,8 @@ function startWorkout(planId) {
       for (let s = 0; s < ex.sets; s++) {
         setsData.push({
           setNumber: s + 1,
-          weight: historyWeight, // Prefill with history or 0
-          reps: historyReps,     // Prefill with target reps or history
+          weight: historyWeight,
+          reps: historyReps,
           done: false
         });
       }
@@ -487,7 +605,6 @@ function startWorkout(planId) {
     document.getElementById('workout-duration-clock').innerText = `${mins}:${secs}`;
   }, 1000);
 
-  // Switch View
   showView('workout', plan.name);
 }
 
@@ -525,7 +642,7 @@ function renderWorkoutView() {
           <td>
             <button class="btn-check-set" data-ex="${exIdx}" data-set="${setIdx}" onclick="toggleSetCheck(this)">
               <svg viewBox="0 0 24 24">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </button>
           </td>
@@ -572,7 +689,6 @@ window.toggleSetCheck = function(btnEl) {
   const setObj = state.activeWorkout.exercises[exIdx].sets[setIdx];
   const rowEl = document.getElementById(`set-row-${exIdx}-${setIdx}`);
   
-  // If weight input is empty, prefill with default or prompt visual error
   const weightInput = rowEl.querySelector('.set-weight');
   if (!weightInput.value) {
     weightInput.value = "0";
@@ -583,7 +699,6 @@ window.toggleSetCheck = function(btnEl) {
 
   if (setObj.done) {
     rowEl.classList.add('done');
-    // Save to active local state
     setObj.weight = parseFloat(weightInput.value);
     setObj.reps = parseInt(rowEl.querySelector('.set-reps').value);
 
@@ -609,7 +724,6 @@ function cancelWorkout() {
 function finishWorkout() {
   if (!state.activeWorkout) return;
 
-  // Validate if at least one set is completed
   let totalSetsLogged = 0;
   state.activeWorkout.exercises.forEach(ex => {
     ex.sets.forEach(set => {
@@ -624,19 +738,19 @@ function finishWorkout() {
 
   if (workoutDurationInterval) clearInterval(workoutDurationInterval);
 
-  // Compile final history item
   const newWorkoutRecord = {
     id: `workout-record-${Date.now()}`,
     planId: state.activeWorkout.planId,
     planName: state.activeWorkout.planName,
+    splitName: state.activeWorkout.splitName,
     date: new Date().toISOString(),
     durationMinutes: Math.max(1, Math.round(workoutSecondsElapsed / 60)),
     exercises: state.activeWorkout.exercises.map(ex => {
       return {
         name: ex.name,
-        sets: ex.sets.filter(s => s.done) // only save completed sets
+        sets: ex.sets.filter(s => s.done)
       };
-    }).filter(ex => ex.sets.length > 0) // only save exercises with completed sets
+    }).filter(ex => ex.sets.length > 0)
   };
 
   state.history.push(newWorkoutRecord);
@@ -644,7 +758,6 @@ function finishWorkout() {
 
   state.activeWorkout = null;
   
-  // Transition
   alert('Hervorragend! Dein Training wurde erfolgreich eingetragen. 💪');
   renderHome();
   showView('home', 'Mein Training');
@@ -657,17 +770,14 @@ function triggerRestTimer(exerciseName, setInfo, seconds) {
   state.timer.totalSeconds = seconds;
   state.timer.secondsLeft = seconds;
   
-  // Update UI Elements
   document.getElementById('timer-exercise-name').innerText = exerciseName;
   document.getElementById('timer-set-info').innerText = setInfo;
   
   updateTimerUI();
 
-  // Slide Sheet Up
   document.getElementById('timer-backdrop').classList.add('active');
   document.getElementById('timer-sheet').classList.add('active');
   
-  // Start Countdowns
   startTimerCountdown();
 }
 
@@ -677,7 +787,6 @@ function startTimerCountdown() {
   state.timer.isRunning = true;
   toggleTimerPlayPauseUI(true);
 
-  // Time tracking variables for solid precision
   let startTimestamp = Date.now();
   let initialSecondsLeft = state.timer.secondsLeft;
 
@@ -690,7 +799,7 @@ function startTimerCountdown() {
     if (state.timer.secondsLeft <= 0) {
       handleTimerExpiration();
     }
-  }, 100); // Poll frequently for smooth ticking
+  }, 100);
 }
 
 function pauseTimerCountdown() {
@@ -708,9 +817,8 @@ function updateTimerUI() {
   
   document.getElementById('timer-countdown').innerText = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 
-  // Update Visual Progress Ring
   const circleProgress = document.getElementById('timer-ring-progress');
-  const dashArrayMax = 596.9; // 2 * PI * r (r=95) -> ~596.9
+  const dashArrayMax = 596.9;
   
   const percentage = state.timer.secondsLeft / state.timer.totalSeconds;
   const strokeOffset = dashArrayMax - (percentage * dashArrayMax);
@@ -736,13 +844,11 @@ function toggleTimerPlayPauseUI(isRunning) {
 
 function adjustTimerSeconds(amount) {
   state.timer.secondsLeft = Math.max(5, state.timer.secondsLeft + amount);
-  // Re-adjust total if we added beyond bounds
   if (state.timer.secondsLeft > state.timer.totalSeconds) {
     state.timer.totalSeconds = state.timer.secondsLeft;
   }
   updateTimerUI();
 
-  // If timer is running, restart countdown interval to sync with real elapsed time
   if (state.timer.isRunning) {
     startTimerCountdown();
   }
@@ -751,18 +857,19 @@ function adjustTimerSeconds(amount) {
 function handleTimerExpiration() {
   pauseTimerCountdown();
   
-  // Play soft tone
-  const audio = document.getElementById('audio-timer-alert');
-  if (audio) {
-    audio.play().catch(e => console.log('Audio playback prevented by browser auto-play policy: ', e));
+  // Play soft tone ONLY if sound is enabled in Settings!
+  if (state.settings.soundEnabled) {
+    const audio = document.getElementById('audio-timer-alert');
+    if (audio) {
+      audio.play().catch(e => console.log('Audio playback prevented by browser: ', e));
+    }
   }
 
-  // Trigger haptic vibration (supported on mobile browser PWAs!)
+  // Trigger vibration
   if ('vibrate' in navigator) {
     navigator.vibrate([200, 100, 200]);
   }
 
-  // Visual notify
   document.getElementById('timer-countdown').innerText = "Fertig!";
   setTimeout(closeTimerSheet, 1200);
 }
@@ -773,10 +880,149 @@ function closeTimerSheet() {
   document.getElementById('timer-sheet').classList.remove('active');
 }
 
+// --- OPTIONS / SETTINGS VIEW CONTROLLER ---
+function renderSettingsView() {
+  // Sound Toggle
+  document.getElementById('toggle-sound').checked = state.settings.soundEnabled;
+
+  // Weight Logs Mini Table
+  const listContainer = document.getElementById('weight-history-list');
+  const title = document.getElementById('weight-logs-title');
+  listContainer.innerHTML = '';
+
+  if (state.weightHistory.length === 0) {
+    title.classList.add('hidden');
+    listContainer.innerHTML = `<div style="padding:14px; text-align:center; color:var(--text-secondary); font-size:14px;">Noch kein Gewicht eingetragen</div>`;
+  } else {
+    title.classList.remove('hidden');
+    // Show last 4 records
+    const sortedWeights = [...state.weightHistory].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
+    
+    sortedWeights.forEach(log => {
+      const d = new Date(log.date);
+      const dStr = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      
+      const row = document.createElement('div');
+      row.className = 'weight-log-item';
+      row.innerHTML = `
+        <span class="weight-log-date">${dStr}</span>
+        <span class="weight-log-val">${log.weight} kg</span>
+      `;
+      listContainer.appendChild(row);
+    });
+  }
+}
+
+function logBodyWeight() {
+  const input = document.getElementById('input-body-weight');
+  const weight = parseFloat(input.value);
+
+  if (isNaN(weight) || weight <= 0) {
+    alert('Bitte ein gültiges Körpergewicht eingeben.');
+    return;
+  }
+
+  state.weightHistory.push({
+    date: new Date().toISOString(),
+    weight: weight
+  });
+
+  saveToLocalStorage();
+  input.value = '';
+  renderSettingsView();
+  alert('Gewicht erfolgreich eingetragen! ⚖️');
+}
+
+function exportToCSV() {
+  if (state.history.length === 0) {
+    alert('Keine Trainingsdaten zum Exportieren vorhanden.');
+    return;
+  }
+
+  // Define columns
+  let csvContent = "Datum,Trainings-Programm (Split),Plan-Name,Uebung,Satz,Gewicht_kg,Wiederholungen\n";
+
+  // Sort history chronologically
+  const sortedHistory = [...state.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  sortedHistory.forEach(workout => {
+    const date = new Date(workout.date).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const splitName = workout.splitName || "Einzelne Pläne";
+    const planName = workout.planName;
+
+    workout.exercises.forEach(ex => {
+      ex.sets.forEach(set => {
+        // Escaping comma values in string names
+        const cleanSplit = splitName.replace(/"/g, '""');
+        const cleanPlan = planName.replace(/"/g, '""');
+        const cleanEx = ex.name.replace(/"/g, '""');
+
+        csvContent += `"${date}","${cleanSplit}","${cleanPlan}","${cleanEx}",${set.setNumber},${set.weight},${set.reps}\n`;
+      });
+    });
+  });
+
+  // Create Blob and trigger direct browser download
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // \uFEFF is UTF-8 BOM so Excel opens German letters cleanly
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `FitTracker_Rohdaten_${new Date().toISOString().slice(0,10)}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function loadDeveloperMockData() {
+  if (confirm('Möchtest du wirklich professionelle Beispieldaten für Pläne, Trainingsverlauf und Körpergewicht laden? Deine aktuellen Daten bleiben dabei erhalten oder werden ergänzt.')) {
+    // Overwrite/merge plans
+    MOCK_PLANS.forEach(mockP => {
+      if (!state.plans.some(p => p.name.toLowerCase() === mockP.name.toLowerCase())) {
+        state.plans.push(mockP);
+      }
+    });
+
+    // Merge mock history
+    const mockHist = generateMockHistory();
+    state.history = [...state.history, ...mockHist];
+
+    // Merge mock weight history
+    const mockWeight = generateMockWeightHistory();
+    state.weightHistory = [...state.weightHistory, ...mockWeight];
+
+    saveToLocalStorage();
+    alert('Beispieldaten erfolgreich geladen! Gehe in die Statistiken, um die fertigen Diagramme anzusehen! 📊');
+    
+    // Refresh & redirect to stats to show off
+    renderHome();
+    showView('stats', 'Statistiken');
+  }
+}
+
+function resetApp() {
+  if (confirm('ACHTUNG: Möchtest du die App wirklich vollständig zurücksetzen? Alle Trainingspläne, deine Gewichtslogs und deine Trainingshistorie werden unwiderruflich gelöscht!')) {
+    if (confirm('Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+      localStorage.clear();
+      state.plans = [];
+      state.history = [];
+      state.weightHistory = [];
+      state.settings = { soundEnabled: true };
+      state.activeWorkout = null;
+      
+      alert('Die App wurde vollständig zurückgesetzt.');
+      location.reload();
+    }
+  }
+}
+
 // --- STATISTICS ENGINE & CHARTING ---
 let chartOverallInstance = null;
 let chartPlanInstance = null;
 let chartExerciseInstance = null;
+let chartWeightInstance = null;
 
 function initStatsView() {
   // Populate Plan Selector
@@ -789,7 +1035,7 @@ function initStatsView() {
     planSelect.appendChild(opt);
   });
 
-  // Populate Exercise Selector with all unique exercises in history
+  // Populate Exercise Selector
   const exerciseSelect = document.getElementById('filter-exercise-select');
   exerciseSelect.innerHTML = '';
   
@@ -801,7 +1047,6 @@ function initStatsView() {
   });
 
   if (uniqueExercises.size === 0) {
-    // Fallback if empty history
     const opt = document.createElement('option');
     opt.innerText = "Keine Übungsdaten vorhanden";
     exerciseSelect.appendChild(opt);
@@ -814,7 +1059,6 @@ function initStatsView() {
     });
   }
 
-  // Load appropriate segments
   updateActiveSegmentStats();
 }
 
@@ -823,10 +1067,8 @@ function updateActiveSegmentStats() {
   const segment = activeSegmentBtn.dataset.segment;
   const timeRange = document.getElementById('filter-time-range').value;
 
-  // Filter history based on time range
   const filteredHistory = filterHistoryByTimeRange(timeRange);
 
-  // Hide all segment content divs, show active
   document.querySelectorAll('.stats-segment-content').forEach(el => {
     el.classList.remove('active');
   });
@@ -834,6 +1076,7 @@ function updateActiveSegmentStats() {
 
   if (segment === 'overall') {
     renderOverallStats(filteredHistory);
+    renderWeightProgressionStats(timeRange);
   } else if (segment === 'plan') {
     renderPlanStats(filteredHistory);
   } else if (segment === 'exercise') {
@@ -855,7 +1098,6 @@ function filterHistoryByTimeRange(daysStr) {
 }
 
 function renderOverallStats(filteredHistory) {
-  // Aggregate
   const workoutsCount = filteredHistory.length;
   let totalVolume = 0;
   let totalDuration = 0;
@@ -878,14 +1120,10 @@ function renderOverallStats(filteredHistory) {
   document.getElementById('stats-duration').innerText = `${totalDuration} Min`;
   document.getElementById('stats-sets').innerText = totalSets;
 
-  // Chart Rendering - Over Time Volume Bar Chart
   const ctx = document.getElementById('chart-overall').getContext('2d');
-  
   if (chartOverallInstance) chartOverallInstance.destroy();
 
-  if (workoutsCount === 0) {
-    return; // Leave empty if no data
-  }
+  if (workoutsCount === 0) return;
 
   const labels = filteredHistory.map(w => {
     const d = new Date(w.date);
@@ -914,9 +1152,74 @@ function renderOverallStats(filteredHistory) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#8e8e93', font: { family: 'Outfit' } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#8e8e93', font: { family: 'Outfit' } }
+        }
+      }
+    }
+  });
+}
+
+function renderWeightProgressionStats(timeRangeStr) {
+  const container = document.getElementById('chart-body-weight-container');
+  const ctx = document.getElementById('chart-body-weight').getContext('2d');
+
+  if (chartWeightInstance) chartWeightInstance.destroy();
+
+  // Filter weight records
+  let filteredWeight = [...state.weightHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  if (timeRangeStr !== 'all') {
+    const days = parseInt(timeRangeStr);
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() - days);
+    filteredWeight = filteredWeight.filter(w => new Date(w.date) >= threshold);
+  }
+
+  if (filteredWeight.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+
+  const labels = filteredWeight.map(w => {
+    const d = new Date(w.date);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  });
+
+  const weights = filteredWeight.map(w => w.weight);
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(10, 132, 255, 0.25)');
+  gradient.addColorStop(1, 'rgba(10, 132, 255, 0.0)');
+
+  chartWeightInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Körpergewicht (kg)',
+        data: weights,
+        borderColor: '#0a84ff',
+        borderWidth: 3,
+        pointBackgroundColor: '#0a84ff',
+        pointHoverRadius: 6,
+        tension: 0.35,
+        fill: true,
+        backgroundColor: gradient
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
       scales: {
         y: {
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
@@ -937,7 +1240,6 @@ function renderPlanStats(filteredHistory) {
 
   if (!planId) return;
 
-  // Filter history to just this plan
   const planHistory = filteredHistory.filter(w => w.planId === planId);
   const workoutCount = planHistory.length;
 
@@ -951,7 +1253,6 @@ function renderPlanStats(filteredHistory) {
   document.getElementById('plan-stats-count').innerText = workoutCount;
   document.getElementById('plan-stats-volume').innerText = `${avgVolume.toLocaleString()} kg`;
 
-  // Draw Line Chart showing Volume Progression
   const ctx = document.getElementById('chart-plan-volume').getContext('2d');
   if (chartPlanInstance) chartPlanInstance.destroy();
 
@@ -968,7 +1269,6 @@ function renderPlanStats(filteredHistory) {
     return vol;
   });
 
-  // Create iOS blue-green gradient for premium touch
   const gradient = ctx.createLinearGradient(0, 0, 0, 200);
   gradient.addColorStop(0, 'rgba(48, 209, 88, 0.3)');
   gradient.addColorStop(1, 'rgba(48, 209, 88, 0.0)');
@@ -984,7 +1284,7 @@ function renderPlanStats(filteredHistory) {
         borderWidth: 3,
         pointBackgroundColor: '#30d158',
         pointHoverRadius: 6,
-        tension: 0.35, // sleek curves
+        tension: 0.35,
         fill: true,
         backgroundColor: gradient
       }]
@@ -1013,15 +1313,12 @@ function renderExerciseStats(filteredHistory) {
 
   if (!exName) return;
 
-  // Filter history records containing this exercise
   const exerciseData = [];
   
   filteredHistory.forEach(w => {
     const matchingEx = w.exercises.find(ex => ex.name.toLowerCase() === exName.toLowerCase());
     if (matchingEx && matchingEx.sets.length > 0) {
-      // Find max weight
       const maxWeight = Math.max(...matchingEx.sets.map(s => s.weight));
-      // Calculate total volume for this exercise
       let vol = 0;
       matchingEx.sets.forEach(s => vol += s.weight * s.reps);
 
@@ -1040,7 +1337,6 @@ function renderExerciseStats(filteredHistory) {
     return;
   }
 
-  // Metrics
   const maxEver = Math.max(...exerciseData.map(d => d.maxWeight));
   let totalExVol = 0;
   exerciseData.forEach(d => totalExVol += d.volume);
@@ -1048,7 +1344,6 @@ function renderExerciseStats(filteredHistory) {
   document.getElementById('exercise-stats-max').innerText = `${maxEver} kg`;
   document.getElementById('exercise-stats-volume').innerText = `${totalExVol.toLocaleString()} kg`;
 
-  // Draw chart
   const ctx = document.getElementById('chart-exercise-progress').getContext('2d');
   if (chartExerciseInstance) chartExerciseInstance.destroy();
 
@@ -1103,24 +1398,25 @@ function setupEventListeners() {
     item.addEventListener('click', () => {
       const tab = item.dataset.tab;
       if (tab === 'home') {
-        renderHome();
         showView('home', 'Mein Training');
       } else if (tab === 'stats') {
         showView('stats', 'Statistiken');
+      } else if (tab === 'settings') {
+        showView('settings', 'Optionen');
       }
     });
   });
 
-  // Home view navigation buttons
+  // Home navigation button
   document.getElementById('btn-to-creator').onclick = () => {
-    setupCreatorView();
+    resetCreatorForm();
     showView('creator', 'Neuer Plan');
   };
 
   // Creator View actions
-  document.getElementById('btn-add-exercise').onclick = addExerciseField;
+  document.getElementById('btn-add-exercise').onclick = () => addExerciseField();
   document.getElementById('btn-cancel-creator').onclick = () => {
-    renderHome();
+    resetCreatorForm();
     showView('home', 'Mein Training');
   };
   document.getElementById('creator-form').onsubmit = saveNewPlan;
@@ -1143,7 +1439,7 @@ function setupEventListeners() {
   document.getElementById('btn-timer-skip').onclick = closeTimerSheet;
   document.getElementById('timer-backdrop').onclick = closeTimerSheet;
 
-  // Stats filter updates
+  // Stats filters
   document.getElementById('filter-time-range').onchange = updateActiveSegmentStats;
   document.getElementById('filter-plan-select').onchange = updateActiveSegmentStats;
   document.getElementById('filter-exercise-select').onchange = updateActiveSegmentStats;
@@ -1156,18 +1452,23 @@ function setupEventListeners() {
       updateActiveSegmentStats();
     };
   });
+
+  // Settings Actions
+  document.getElementById('btn-save-weight').onclick = logBodyWeight;
+  document.getElementById('btn-export-csv').onclick = exportToCSV;
+  document.getElementById('btn-load-mockdata').onclick = loadDeveloperMockData;
+  document.getElementById('btn-reset-app').onclick = resetApp;
+
+  // Sound toggle event
+  document.getElementById('toggle-sound').onchange = (e) => {
+    state.settings.soundEnabled = e.target.checked;
+    saveToLocalStorage();
+  };
 }
 
 // --- INITIALIZATION ---
 window.onload = () => {
   loadFromLocalStorage();
-
-  // Populate mock data if nothing exists yet
-  if (state.plans.length === 0) {
-    state.plans = [...MOCK_PLANS];
-    state.history = generateMockHistory();
-    saveToLocalStorage();
-  }
 
   // Pre-populate creator input structures
   setupCreatorView();
@@ -1179,7 +1480,7 @@ window.onload = () => {
   renderHome();
   showView('home', 'Mein Training');
   
-  // Register service worker if possible
+  // Register service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => {
       console.log('Service Worker registration skipped: ', err);

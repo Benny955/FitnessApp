@@ -66,15 +66,15 @@
           </div>
         </div>
 
-        <!-- Section Title: Plans -->
+        <!-- Section Title: Plans grouped by Splits -->
         <div class="section-header">
-          <h2>Trainingspläne</h2>
+          <h2>Trainings-Programme</h2>
           <button id="btn-to-creator" class="btn-text-link">+ Neuer Plan</button>
         </div>
 
-        <!-- Plans Grid/List -->
-        <div id="plans-list" class="plans-list">
-          <!-- Dynamisch gerendert -->
+        <!-- Plans Grid/List grouped by Splits (Überordner) -->
+        <div id="splits-container" class="splits-container">
+          <!-- Dynamisch gerendert nach Split-Überordnern -->
           <div class="empty-state">
             <div class="empty-icon">💪</div>
             <h3>Keine Trainingspläne</h3>
@@ -95,9 +95,17 @@
       <!-- VIEW: CREATOR (PLAN BUILDER) -->
       <section id="view-creator" class="view">
         <form id="creator-form" onsubmit="event.preventDefault();">
+          <!-- Hidden Input for Editing Mode -->
+          <input type="hidden" id="creator-edit-id" value="">
+
           <div class="form-group">
             <label for="plan-name">Name des Trainingsplans</label>
-            <input type="text" id="plan-name" placeholder="z.B. Montag - Push (Brust, Trizeps)" required autocomplete="off">
+            <input type="text" id="plan-name" placeholder="z.B. Push (Brust, Trizeps)" required autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="plan-split">Programm / Trainings-Split (Überordner)</label>
+            <input type="text" id="plan-split" placeholder="z.B. 5er Split, Push/Pull/Beine, Ganzkörper" autocomplete="off">
           </div>
 
           <div class="section-header">
@@ -180,6 +188,11 @@
             <h3>Trainingshäufigkeit & Volumen</h3>
             <canvas id="chart-overall"></canvas>
           </div>
+
+          <div class="chart-container" id="chart-body-weight-container">
+            <h3>Körpergewicht-Verlauf</h3>
+            <canvas id="chart-body-weight"></canvas>
+          </div>
         </div>
 
         <!-- SEGMENT: PLAN STATS -->
@@ -237,6 +250,59 @@
         </div>
       </section>
 
+      <!-- VIEW: SETTINGS -->
+      <section id="view-settings" class="view">
+        <!-- User Weight Card -->
+        <div class="settings-card">
+          <h3>Körpergewicht Tracker</h3>
+          <p class="settings-desc">Trage dein aktuelles Gewicht ein, um deinen Verlauf in der Statistik zu sehen.</p>
+          <div class="weight-input-row">
+            <input type="number" id="input-body-weight" placeholder="z.B. 82.5" step="0.1" min="1" max="500">
+            <span class="weight-unit">kg</span>
+            <button id="btn-save-weight" class="btn-primary-pill compact">Loggen</button>
+          </div>
+          
+          <div class="weight-logs-title hidden" id="weight-logs-title">Letzte Einträge</div>
+          <div id="weight-history-list" class="weight-history-list">
+            <!-- Letzte Gewichtseinträge -->
+          </div>
+        </div>
+
+        <!-- Preferences Card -->
+        <div class="settings-card">
+          <h3>Einstellungen & Signale</h3>
+          <div class="settings-row-item">
+            <div class="settings-item-label">
+              <h4>Signalton & Vibration</h4>
+              <p>Ton abspielen, wenn die Pausenzeit abgelaufen ist.</p>
+            </div>
+            <label class="ios-switch">
+              <input type="checkbox" id="toggle-sound" checked>
+              <span class="ios-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Export & Progression Card -->
+        <div class="settings-card">
+          <h3>Analytische Progression</h3>
+          <p class="settings-desc">Exportiere deine vollständigen Trainings-Rohdaten als CSV-Datei für Excel, R oder Python.</p>
+          <button id="btn-export-csv" class="btn-secondary-pill">
+            📥 Rohdaten exportieren (CSV)
+          </button>
+        </div>
+
+        <!-- Data Management Card -->
+        <div class="settings-card">
+          <h3>Datenpflege</h3>
+          <p class="settings-desc">Verwalte deine lokalen Anwendungsdaten.</p>
+          <div class="settings-buttons-grid">
+            <button id="btn-load-mockdata" class="btn-secondary-pill compact">Beispieldaten laden</button>
+            <button id="btn-reset-app" class="btn-text-danger-border">App zurücksetzen</button>
+          </div>
+        </div>
+      </section>
+
     </main>
 
     <!-- BOTTOM TAB BAR (iOS STYLE) -->
@@ -252,6 +318,12 @@
           <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
         </svg>
         <span class="tab-label">Statistiken</span>
+      </button>
+      <button class="tab-item" data-tab="settings">
+        <svg class="tab-icon" viewBox="0 0 24 24">
+          <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+        </svg>
+        <span class="tab-label">Optionen</span>
       </button>
     </nav>
 
@@ -272,7 +344,7 @@
       <div class="timer-visual-container">
         <svg class="timer-ring-svg" viewBox="0 0 220 220">
           <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
-          <circle id="timer-ring-progress" class="timer-ring-progress" cx="110" cy="110" r="95" stroke-dasharray="596.9" stroke-dashoffet="0"/>
+          <circle id="timer-ring-progress" class="timer-ring-progress" cx="110" cy="110" r="95" stroke-dasharray="596.9" stroke-dashoffset="0"/>
         </svg>
         <div class="timer-digital-display" id="timer-countdown">01:30</div>
       </div>
