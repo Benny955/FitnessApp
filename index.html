@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FitTracker - Dein Trainingsplaner</title>
+  
+  <!-- Apple PWA Meta-Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FitTracker">
+  <link rel="apple-touch-icon" href="icon.png">
+  
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Google Fonts for Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js for High-End responsive charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- iOS Dynamic Top Status Bar Background (Glassmorphism) -->
+  <div class="status-bar-blur"></div>
+
+  <!-- Main Container -->
+  <div class="app-container">
+    
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="header-content">
+        <h1 id="header-title">Mein Training</h1>
+        <button id="header-action-btn" class="header-action-btn hidden">
+          <!-- Dynamischer Action-Button (z.B. Bearbeiten oder Schließen) -->
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT VIEWS -->
+    <main class="app-content">
+      
+      <!-- VIEW: HOME / OVERVIEW -->
+      <section id="view-home" class="view active">
+        <!-- Quick Summary Card -->
+        <div class="summary-card">
+          <div class="summary-header">
+            <h3>Aktivität diese Woche</h3>
+            <span class="summary-badge" id="weekly-count-badge">0 Workouts</span>
+          </div>
+          <div class="summary-stats">
+            <div class="stat-item">
+              <span class="stat-value" id="stat-total-volume">0 kg</span>
+              <span class="stat-label">Gesamtvolumen</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-value" id="stat-avg-duration">0 Min</span>
+              <span class="stat-label">Durchschn. Zeit</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section Title: Plans -->
+        <div class="section-header">
+          <h2>Trainingspläne</h2>
+          <button id="btn-to-creator" class="btn-text-link">+ Neuer Plan</button>
+        </div>
+
+        <!-- Plans Grid/List -->
+        <div id="plans-list" class="plans-list">
+          <!-- Dynamisch gerendert -->
+          <div class="empty-state">
+            <div class="empty-icon">💪</div>
+            <h3>Keine Trainingspläne</h3>
+            <p>Erstelle deinen ersten Trainingsplan, um loszulegen!</p>
+            <button id="btn-empty-create" class="btn-primary-pill">+ Trainingsplan erstellen</button>
+          </div>
+        </div>
+
+        <!-- Section Title: Recent Workouts -->
+        <div class="section-header recent-workouts-header hidden">
+          <h2>Letzte Aktivitäten</h2>
+        </div>
+        <div id="recent-workouts-list" class="recent-workouts-list">
+          <!-- Dynamisch gerendert -->
+        </div>
+      </section>
+
+      <!-- VIEW: CREATOR (PLAN BUILDER) -->
+      <section id="view-creator" class="view">
+        <form id="creator-form" onsubmit="event.preventDefault();">
+          <div class="form-group">
+            <label for="plan-name">Name des Trainingsplans</label>
+            <input type="text" id="plan-name" placeholder="z.B. Montag - Push (Brust, Trizeps)" required autocomplete="off">
+          </div>
+
+          <div class="section-header">
+            <h2>Übungen</h2>
+          </div>
+
+          <div id="creator-exercises-container" class="creator-exercises-container">
+            <!-- Dynamische Übungsfelder werden hier eingefügt -->
+          </div>
+
+          <button type="button" id="btn-add-exercise" class="btn-secondary-pill">
+            <span class="icon">+</span> Übung hinzufügen
+          </button>
+
+          <div class="form-actions">
+            <button type="button" id="btn-cancel-creator" class="btn-text-cancel">Abbrechen</button>
+            <button type="submit" id="btn-save-plan" class="btn-primary-pill">Plan speichern</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- VIEW: WORKOUT (ACTIVE LOGGING) -->
+      <section id="view-workout" class="view">
+        <div class="workout-info-bar">
+          <div class="workout-timer-display" id="workout-duration-clock">00:00</div>
+          <button id="btn-cancel-workout" class="btn-text-danger">Abbrechen</button>
+        </div>
+
+        <div id="workout-exercises-list" class="workout-exercises-list">
+          <!-- Übungen und Sätze zum Eintragen -->
+        </div>
+
+        <div class="workout-footer">
+          <button id="btn-finish-workout" class="btn-success-pill">Training beenden</button>
+        </div>
+      </section>
+
+      <!-- VIEW: STATISTICS -->
+      <section id="view-stats" class="view">
+        <!-- Dashboard Navigation Buttons -->
+        <div class="segment-control">
+          <button class="segment-btn active" data-segment="overall">Gesamt</button>
+          <button class="segment-btn" data-segment="plans">Pläne</button>
+          <button class="segment-btn" data-segment="exercises">Übungen</button>
+        </div>
+
+        <!-- Scaling Selectors (Time Range) -->
+        <div class="filter-row">
+          <label for="filter-time-range">Zeitraum:</label>
+          <select id="filter-time-range" class="ios-select">
+            <option value="7">Letzte 7 Tage</option>
+            <option value="30" selected>Letzte 30 Tage</option>
+            <option value="90">Letzte 90 Tage</option>
+            <option value="all">Gesamter Verlauf</option>
+          </select>
+        </div>
+
+        <!-- SEGMENT: OVERALL STATS -->
+        <div id="stats-segment-overall" class="stats-segment-content active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-card-value" id="stats-count">0</span>
+              <span class="stat-card-label">Workouts absolviert</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card-value" id="stats-volume">0 kg</span>
+              <span class="stat-card-label">Gesamtes Gewicht</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card-value" id="stats-duration">0 Min</span>
+              <span class="stat-card-label">Trainingszeit gesamt</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card-value" id="stats-sets">0</span>
+              <span class="stat-card-label">Sätze insgesamt</span>
+            </div>
+          </div>
+          
+          <div class="chart-container">
+            <h3>Trainingshäufigkeit & Volumen</h3>
+            <canvas id="chart-overall"></canvas>
+          </div>
+        </div>
+
+        <!-- SEGMENT: PLAN STATS -->
+        <div id="stats-segment-plans" class="stats-segment-content">
+          <div class="filter-row">
+            <label for="filter-plan-select">Trainingsplan:</label>
+            <select id="filter-plan-select" class="ios-select">
+              <!-- Dynamisch befüllt -->
+            </select>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-card-value" id="plan-stats-count">0</span>
+              <span class="stat-card-label">Absolviert</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card-value" id="plan-stats-volume">0 kg</span>
+              <span class="stat-card-label">Durchschnittsvolumen</span>
+            </div>
+          </div>
+
+          <div class="chart-container">
+            <h3>Volumenverlauf pro Workout</h3>
+            <canvas id="chart-plan-volume"></canvas>
+          </div>
+        </div>
+
+        <!-- SEGMENT: EXERCISE STATS -->
+        <div id="stats-segment-exercises" class="stats-segment-content">
+          <div class="filter-row flex-column">
+            <div class="filter-item">
+              <label for="filter-exercise-select">Übung auswählen:</label>
+              <select id="filter-exercise-select" class="ios-select">
+                <!-- Dynamisch befüllt -->
+              </select>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-card-value" id="exercise-stats-max">0 kg</span>
+              <span class="stat-card-label">Maximalgewicht (1RM Est.)</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card-value" id="exercise-stats-volume">0 kg</span>
+              <span class="stat-card-label">Bisheriges Gesamtvolumen</span>
+            </div>
+          </div>
+
+          <div class="chart-container">
+            <h3>Entwicklung des Maximalgewichts</h3>
+            <canvas id="chart-exercise-progress"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM TAB BAR (iOS STYLE) -->
+    <nav class="tab-bar">
+      <button class="tab-item active" data-tab="home">
+        <svg class="tab-icon" viewBox="0 0 24 24">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+        <span class="tab-label">Training</span>
+      </button>
+      <button class="tab-item" data-tab="stats">
+        <svg class="tab-icon" viewBox="0 0 24 24">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+        </svg>
+        <span class="tab-label">Statistiken</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- iOS BOTTOM SHEET FOR TIMER (REST COUNTDOWN) -->
+  <div id="timer-backdrop" class="timer-backdrop"></div>
+  <div id="timer-sheet" class="timer-sheet">
+    <div class="timer-handle"></div>
+    
+    <div class="timer-content">
+      <div class="timer-header">
+        <span id="timer-exercise-name">Kniebeugen</span>
+        <span id="timer-set-info">Satz 1 abgeschlossen</span>
+      </div>
+
+      <!-- Circular Countdown Timer -->
+      <div class="timer-visual-container">
+        <svg class="timer-ring-svg" viewBox="0 0 220 220">
+          <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
+          <circle id="timer-ring-progress" class="timer-ring-progress" cx="110" cy="110" r="95" stroke-dasharray="596.9" stroke-dashoffet="0"/>
+        </svg>
+        <div class="timer-digital-display" id="timer-countdown">01:30</div>
+      </div>
+
+      <!-- Quick time adjust buttons -->
+      <div class="timer-adjust-row">
+        <button id="btn-timer-sub15" class="btn-adjust">-15s</button>
+        <button id="btn-timer-add15" class="btn-adjust">+15s</button>
+      </div>
+
+      <!-- Controls -->
+      <div class="timer-controls">
+        <button id="btn-timer-toggle" class="btn-timer-main play">
+          <!-- SVG Play/Pause dynamically managed -->
+          <svg class="icon-play" viewBox="0 0 24 24" width="28" height="28">
+            <path d="M8 5v14l11-7z" fill="currentColor"/>
+          </svg>
+          <svg class="icon-pause hidden" viewBox="0 0 24 24" width="28" height="28">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="btn-timer-skip" class="btn-timer-secondary">Überspringen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sound for completed timer -->
+  <audio id="audio-timer-alert" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-500.wav" preload="auto"></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
