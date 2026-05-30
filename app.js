@@ -1072,7 +1072,11 @@ function updateActiveSegmentStats() {
   document.querySelectorAll('.stats-segment-content').forEach(el => {
     el.classList.remove('active');
   });
-  document.getElementById(`stats-segment-${segment}s`).classList.add('active');
+  const targetId = segment === 'overall' ? 'stats-segment-overall' : `stats-segment-${segment}s`;
+  const targetEl = document.getElementById(targetId);
+  if (targetEl) {
+    targetEl.classList.add('active');
+  }
 
   if (segment === 'overall') {
     renderOverallStats(filteredHistory);
