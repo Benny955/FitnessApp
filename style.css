@@ -1474,3 +1474,20 @@ body {
   margin-top: 2px;
 }
 
+/* Custom weights input active states and feedback badge */
+.ex-available-weights.custom-active {
+  border-color: var(--color-success) !important;
+  background-color: rgba(48, 209, 88, 0.05) !important;
+  box-shadow: 0 0 8px rgba(48, 209, 88, 0.15) !important;
+}
+
+.custom-weights-badge {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-success);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+

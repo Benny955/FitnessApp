@@ -63,7 +63,7 @@ class ProgressionService {
    * @param {Array} history Completed workouts history list
    * @param {Object} planExercise Exercise configuration from the training plan
    */
-  static analyze(exerciseName, history, planExercise) {
+  static analyze(exerciseName, history, planExercise, globalAvailableWeights = []) {
     if (!planExercise) {
       return {
         exerciseName,
@@ -246,27 +246,52 @@ class ProgressionService {
       };
     }
 
-    // 8. Weight Steps Validation (available_weights)
-    if (!profile.available_weights || profile.available_weights.length === 0) {
-      return {
-        exerciseName,
-        status: "missing_available_weights",
-        currentWeight,
-        slope,
-        volumeGrowthPercent,
-        restWarning,
-        reason: "Keine verfügbaren Gewichtsstufen für diese Übung hinterlegt.",
-        userMessage: `${exerciseName}: Positiver Trend! Aber es sind noch keine verfügbaren Gewichtsstufen für diese Übung hinterlegt.`,
-        profile,
-        trendWindowSessions
-      };
+    // 8. Weight Steps Validation & Resolution (available_weights / global fallback / constant step)
+    let nextAvailableWeight = undefined;
+    let usingConstantStep = false;
+    let constantStepValue = 0;
+
+    // Check if we have a single item in available weights representing a constant step size
+    if (profile.available_weights && profile.available_weights.length === 1) {
+      constantStepValue = Number(profile.available_weights[0]);
+      if (!isNaN(constantStepValue) && constantStepValue > 0) {
+        nextAvailableWeight = currentWeight + constantStepValue;
+        usingConstantStep = true;
+      }
     }
 
-    // Sort available weights
-    const sortedWeights = [...profile.available_weights].map(Number).sort((a, b) => a - b);
-    
-    // Find next available weight step higher than current
-    const nextAvailableWeight = sortedWeights.find(w => w > currentWeight);
+    if (!usingConstantStep) {
+      // Choose list of weights to use: custom or global fallback
+      let weightsToUse = [];
+      if (profile.available_weights && profile.available_weights.length > 0) {
+        weightsToUse = profile.available_weights;
+      } else if (globalAvailableWeights && globalAvailableWeights.length > 0) {
+        weightsToUse = globalAvailableWeights;
+      } else {
+        // Ultimate fallback: standard gym weights from 2.5 to 200 kg in 2.5kg steps
+        for (let w = 2.5; w <= 200; w += 2.5) {
+          weightsToUse.push(w);
+        }
+      }
+
+      const sortedWeights = [...weightsToUse].map(Number).sort((a, b) => a - b);
+      nextAvailableWeight = sortedWeights.find(w => w > currentWeight);
+
+      if (sortedWeights.length === 0) {
+        return {
+          exerciseName,
+          status: "missing_available_weights",
+          currentWeight,
+          slope,
+          volumeGrowthPercent,
+          restWarning,
+          reason: "Keine verfügbaren Gewichtsstufen für diese Übung hinterlegt.",
+          userMessage: `${exerciseName}: Positiver Trend! Aber es sind noch keine verfügbaren Gewichtsstufen für diese Übung hinterlegt.`,
+          profile,
+          trendWindowSessions
+        };
+      }
+    }
 
     if (nextAvailableWeight === undefined) {
       return {
@@ -454,6 +479,25 @@ class ProgressionService {
     results.push({
       scenario: "8. Cooldown nach kürzlicher Gewichtserhöhung",
       analysis: this.analyze("Bankdrücken", history8, mockPlanExercise)
+    });
+
+    // --- CASE 9: Global Fallback Weights (v2.1) ---
+    // Exercise available_weights is empty. We pass global available weights [60, 70, 80, 82.5, 85, 90] as fourth argument.
+    // It should successfully fallback to global weights and recommend increase to 82.5 kg!
+    const planGlobalFallback = {...mockPlanExercise, available_weights: []};
+    results.push({
+      scenario: "9. Globaler Gewichts-Fallback (v2.1)",
+      analysis: this.analyze("Bankdrücken", history1, planGlobalFallback, [60, 70, 80, 82.5, 85, 90])
+    });
+
+    // --- CASE 10: Constant Increment Step (v2.1) ---
+    // Exercise has available_weights = [2.5] (single number step).
+    // Current weight is 80kg. 2.5kg step means next weight is 82.5kg (jump of 3.125% <= 5%).
+    // Recommendation should recommend increase to 82.5 kg!
+    const planConstantStep = {...mockPlanExercise, available_weights: [2.5]};
+    results.push({
+      scenario: "10. Konstanter Steigerungsschritt z.B. Maschine (+2.5kg) (v2.1)",
+      analysis: this.analyze("Bankdrücken", history1, planConstantStep)
     });
 
     return results;

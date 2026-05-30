@@ -10,7 +10,8 @@ const state = {
   history: [],
   weightHistory: [],
   settings: {
-    soundEnabled: true
+    soundEnabled: true,
+    globalAvailableWeights: [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150]
   },
   activeWorkout: null,
   timer: {
@@ -199,7 +200,12 @@ function loadFromLocalStorage() {
   if (plansStr) state.plans = JSON.parse(plansStr);
   if (histStr) state.history = JSON.parse(histStr);
   if (weightStr) state.weightHistory = JSON.parse(weightStr);
-  if (settingsStr) state.settings = JSON.parse(settingsStr);
+  if (settingsStr) {
+    state.settings = JSON.parse(settingsStr);
+    if (!state.settings.globalAvailableWeights || state.settings.globalAvailableWeights.length === 0) {
+      state.settings.globalAvailableWeights = [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115, 117.5, 120, 122.5, 125, 127.5, 130, 135, 140, 145, 150];
+    }
+  }
 }
 
 // --- APP NAVIGATION ---
@@ -500,8 +506,11 @@ function addExerciseField(name = '', sets = 3, reps = 10, rest = 90, exercise_ty
       </div>
 
       <div class="form-group" style="margin-bottom: 0;">
-        <label style="font-size:11px;">Verfügbare Gewichte im Gym (Komma-getrennt)</label>
-        <input type="text" class="ex-available-weights" value="${weightsStr}" placeholder="z.B. 10, 12.5, 15, 17.5, 20" autocomplete="off" style="padding:8px; font-size:13px;">
+        <label style="font-size:11px;">Verfügbare Gewichte (Optional)</label>
+        <input type="text" class="ex-available-weights ${weightsStr ? 'custom-active' : ''}" value="${weightsStr}" placeholder="Leer = Global nutzen | z.B. '5' für 5kg-Schritte oder '10,12.5,15'" autocomplete="off" style="padding:8px; font-size:13px;" oninput="onExerciseWeightsInput(this)">
+        <span class="custom-weights-badge ${weightsStr ? '' : 'hidden'}" style="margin-top: 4px;">
+          ${weightsStr ? (weightsStr.includes(',') || isNaN(Number(weightsStr)) ? '✓ Individuelle Gewichtsliste aktiv' : `✓ Konstante Steigerung um ${weightsStr} kg aktiv`) : ''}
+        </span>
       </div>
     </div>
   `;
@@ -545,6 +554,27 @@ window.onExerciseTypeChange = function(index) {
   } else {
     minInput.value = 8;
     maxInput.value = 12;
+  }
+};
+
+window.onExerciseWeightsInput = function(inputEl) {
+  const val = inputEl.value.trim();
+  const container = inputEl.parentNode;
+  let badge = container.querySelector('.custom-weights-badge');
+  
+  if (val) {
+    inputEl.classList.add('custom-active');
+    badge.classList.remove('hidden');
+    
+    if (val.includes(',') || isNaN(Number(val))) {
+      badge.innerText = '✓ Individuelle Gewichtsliste aktiv';
+    } else {
+      badge.innerText = `✓ Konstante Steigerung um ${val} kg aktiv`;
+    }
+  } else {
+    inputEl.classList.remove('custom-active');
+    badge.classList.add('hidden');
+    badge.innerText = '';
   }
 };
 
@@ -996,6 +1026,11 @@ function closeTimerSheet() {
 function renderSettingsView() {
   document.getElementById('toggle-sound').checked = state.settings.soundEnabled;
 
+  const globalWeightsInput = document.getElementById('input-global-weights');
+  if (globalWeightsInput && state.settings.globalAvailableWeights) {
+    globalWeightsInput.value = state.settings.globalAvailableWeights.join(', ');
+  }
+
   const listContainer = document.getElementById('weight-history-list');
   const title = document.getElementById('weight-logs-title');
   listContainer.innerHTML = '';
@@ -1040,6 +1075,30 @@ function logBodyWeight() {
   input.value = '';
   renderSettingsView();
   alert('Gewicht erfolgreich eingetragen! ⚖️');
+}
+
+function saveGlobalWeights() {
+  const input = document.getElementById('input-global-weights');
+  if (!input) return;
+  
+  const val = input.value;
+  const parsedWeights = val.split(',')
+    .map(w => parseFloat(w.trim()))
+    .filter(w => !isNaN(w) && w > 0)
+    .sort((a, b) => a - b);
+    
+  if (parsedWeights.length === 0) {
+    alert('Bitte gib mindestens eine gültige Gewichtsstufe ein (z.B. 2.5, 5, 7.5).');
+    return;
+  }
+  
+  state.settings.globalAvailableWeights = parsedWeights;
+  saveToLocalStorage();
+  alert('Globale Gewichtsstufen erfolgreich gespeichert! 🏋️');
+  
+  if (document.querySelector('.tab-item.active').dataset.tab === 'stats') {
+    updateActiveSegmentStats();
+  }
 }
 
 function exportToCSV() {
@@ -1191,7 +1250,7 @@ function renderProgressionCoach() {
 
   planExercises.forEach(item => {
     // Run Progression Analysis!
-    const analysis = ProgressionService.analyze(item.name, state.history, item.planExercise);
+    const analysis = ProgressionService.analyze(item.name, state.history, item.planExercise, state.settings.globalAvailableWeights);
 
     const card = document.createElement('div');
     card.className = 'plan-card';
@@ -1730,6 +1789,7 @@ function setupEventListeners() {
   });
 
   document.getElementById('btn-save-weight').onclick = logBodyWeight;
+  document.getElementById('btn-save-global-weights').onclick = saveGlobalWeights;
   document.getElementById('btn-export-csv').onclick = exportToCSV;
   document.getElementById('btn-load-mockdata').onclick = loadDeveloperMockData;
   document.getElementById('btn-reset-app').onclick = resetApp;
