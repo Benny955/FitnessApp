@@ -105,7 +105,8 @@
 
           <div class="form-group">
             <label for="plan-split">Programm / Trainings-Split (Überordner)</label>
-            <input type="text" id="plan-split" placeholder="z.B. 5er Split, Push/Pull/Beine, Ganzkörper" autocomplete="off">
+            <input type="text" id="plan-split" placeholder="z.B. 5er Split, Push/Pull/Beine, Ganzkörper" autocomplete="off" list="existing-splits">
+            <datalist id="existing-splits"></datalist>
           </div>
 
           <div class="section-header">
@@ -193,6 +194,10 @@
           <div class="chart-container" id="chart-body-weight-container">
             <h3>Körpergewicht-Verlauf</h3>
             <canvas id="chart-body-weight"></canvas>
+            <div id="weight-trend-analysis-card" class="settings-card" style="margin-top: 15px; margin-bottom: 0; padding: 12px; background-color: var(--bg-tertiary); border: 0.5px solid var(--border-color); border-radius: var(--border-radius-md);">
+              <h4 style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px;">Wöchentliche Trendanalyse</h4>
+              <div id="weight-trend-analysis-text"></div>
+            </div>
           </div>
         </div>
 
@@ -317,23 +322,49 @@
           <button id="btn-save-global-weights" class="btn-primary-pill compact">Scheiben speichern</button>
         </div>
 
-        <!-- Export & Progression Card -->
+        <!-- Readme Guide Card -->
+        <div class="settings-card">
+          <h3>Handbuch & PWA-Guide</h3>
+          <p class="settings-desc">Tipps für die Nutzung von IRONPROGRESS als Web-App offline und im Gym.</p>
+          <button id="btn-toggle-readme" class="btn-secondary-pill compact" onclick="toggleReadmeGuide()">📖 Handbuch anzeigen</button>
+          
+          <div id="readme-guide-content" class="hidden" style="margin-top: 15px; font-size:13px; line-height: 1.5; color: var(--text-secondary); border-top: 0.5px solid var(--border-color); padding-top: 12px;">
+            <p style="margin-bottom: 10px;"><strong>📱 Als App installieren (iOS Safari)</strong><br>
+            Tippe unten in Safari auf das <em>Teilen</em>-Symbol (Viereck mit Pfeil nach oben) und wähle <strong>„Zum Home-Bildschirm hinzufügen“</strong>. Dadurch läuft IRONPROGRESS im Vollbildmodus und ohne Browserleisten!</p>
+            
+            <p style="margin-bottom: 10px;"><strong>📴 Offline-Nutzung im Studio</strong><br>
+            Die App nutzt Service Worker, um alle Daten lokal zu cachen. Einmal im Browser oder am Home-Bildschirm geladen, funktioniert sie im Kellergym komplett ohne Internetverbindung. Trainingsdaten werden sicher lokal auf deinem Gerät gespeichert.</p>
+            
+            <p style="margin-bottom: 10px;"><strong>📈 Der Progressions-Algorithmus</strong><br>
+            Der Coach wertet deine letzten 3 Einheiten aus. Er verlangt einen positiven Volumentrend (lineare Regression) und dass du deine Zielwiederholungen im letzten Training stabil geschafft hast, bevor er eine Erhöhung empfiehlt. Bei Maschinen greift ein konstanter Gewichtsschritt (z.B. +5kg), ansonsten deine globale Hantelausstattung.</p>
+            
+            <p><strong>⚙️ Satz-Typen (W/D)</strong><br>
+            Tippe im Training auf die Satznummer (z.B. <em>Satz 1</em>), um den Satz als <strong>Warmup (W)</strong> oder <strong>Drop-Satz (D)</strong> zu markieren. Warmups und Dropsätze fließen nicht in die Progressionsberechnungen der Grundübung ein, um deine Trendkurve sauber zu halten.</p>
+          </div>
+        </div>
+
+        <!-- Data Management & Backups Card -->
+        <div class="settings-card">
+          <h3>Datenpflege & Backups</h3>
+          <p class="settings-desc">Sichere deine Trainingsdaten oder spiele ein Backup ein (JSON-Format).</p>
+          <div class="settings-buttons-grid" style="margin-bottom: 12px;">
+            <button id="btn-export-backup" class="btn-secondary-pill compact">Backup exportieren</button>
+            <button id="btn-trigger-import" class="btn-secondary-pill compact">Backup importieren</button>
+            <input type="file" id="input-import-file" accept=".json" style="display:none;">
+          </div>
+          <div class="settings-buttons-grid" style="border-top: 0.5px solid var(--border-color); padding-top: 12px;">
+            <button id="btn-load-mockdata" class="btn-secondary-pill compact">Beispieldaten laden</button>
+            <button id="btn-reset-app" class="btn-text-danger-border">App zurücksetzen</button>
+          </div>
+        </div>
+
+        <!-- Export CSV Card -->
         <div class="settings-card">
           <h3>Analytische Progression</h3>
           <p class="settings-desc">Exportiere deine vollständigen Trainings-Rohdaten als CSV-Datei für Excel, R oder Python.</p>
           <button id="btn-export-csv" class="btn-secondary-pill">
             📥 Rohdaten exportieren (CSV)
           </button>
-        </div>
-
-        <!-- Data Management Card -->
-        <div class="settings-card">
-          <h3>Datenpflege</h3>
-          <p class="settings-desc">Verwalte deine lokalen Anwendungsdaten.</p>
-          <div class="settings-buttons-grid">
-            <button id="btn-load-mockdata" class="btn-secondary-pill compact">Beispieldaten laden</button>
-            <button id="btn-reset-app" class="btn-text-danger-border">App zurücksetzen</button>
-          </div>
         </div>
 
         <!-- Progressions-Diagnose (Test-Center) -->
@@ -426,6 +457,38 @@
 
   <!-- Sound for completed timer -->
   <audio id="audio-timer-alert" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-500.wav" preload="auto"></audio>
+
+  <!-- iOS BOTTOM SHEET FOR WORKOUT HISTORY DETAIL -->
+  <div id="history-backdrop" class="timer-backdrop"></div>
+  <div id="history-sheet" class="timer-sheet">
+    <div class="timer-handle"></div>
+    <div class="timer-content" style="max-height: 80vh; overflow-y: auto; padding-bottom: 30px;">
+      <div class="timer-header" style="margin-bottom: 20px;">
+        <span id="history-detail-title" style="font-size: 18px; font-weight: 700;">Workout Details</span>
+        <span id="history-detail-date" style="font-size: 13px; color: var(--text-secondary);">Datum</span>
+      </div>
+      
+      <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+        <div class="stat-card" style="padding: 10px;">
+          <span class="stat-card-value" id="history-detail-volume" style="font-size: 20px;">0 kg</span>
+          <span class="stat-card-label" style="font-size: 10px;">Volumen</span>
+        </div>
+        <div class="stat-card" style="padding: 10px;">
+          <span class="stat-card-value" id="history-detail-duration" style="font-size: 20px;">0 Min</span>
+          <span class="stat-card-label" style="font-size: 10px;">Dauer</span>
+        </div>
+      </div>
+
+      <div id="history-detail-exercises-list" class="plans-list" style="gap: 12px; margin-bottom: 20px;">
+        <!-- Exercises list rendered dynamically -->
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <button id="btn-delete-history-record" class="btn-text-danger-border" style="flex: 1; border-radius: 20px; font-size:14px; padding: 10px;">Eintrag löschen</button>
+        <button id="btn-close-history-detail" class="btn-primary-pill compact" style="flex: 1; border-radius: 20px; font-size:14px; padding: 10px;">Schließen</button>
+      </div>
+    </div>
+  </div>
 
   <script src="progression.js"></script>
   <script src="app.js"></script>

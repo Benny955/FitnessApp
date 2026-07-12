@@ -316,17 +316,50 @@ function renderHome() {
       groupedPlans[splitName].push(plan);
     });
 
+    const collapsedSplits = JSON.parse(localStorage.getItem('ironprogress_v2_collapsed_splits') || '[]');
+
     Object.keys(groupedPlans).sort().forEach(splitName => {
       const splitGroup = document.createElement('div');
       splitGroup.className = 'split-group';
       
+      const isCollapsed = collapsedSplits.includes(splitName);
+      
       const splitHeader = document.createElement('div');
       splitHeader.className = 'split-header';
-      splitHeader.innerText = splitName;
+      splitHeader.style.cursor = 'pointer';
+      splitHeader.style.display = 'flex';
+      splitHeader.style.justifyContent = 'space-between';
+      splitHeader.style.alignItems = 'center';
+      splitHeader.innerHTML = `
+        <span>${splitName}</span>
+        <span class="split-arrow" style="font-size:12px;">${isCollapsed ? '▶' : '▼'}</span>
+      `;
       splitGroup.appendChild(splitHeader);
 
       const plansList = document.createElement('div');
       plansList.className = 'plans-list';
+      if (isCollapsed) {
+        plansList.style.display = 'none';
+      }
+      
+      splitHeader.onclick = () => {
+        const arrow = splitHeader.querySelector('.split-arrow');
+        const currentlyCollapsed = plansList.style.display === 'none';
+        let collapsedList = JSON.parse(localStorage.getItem('ironprogress_v2_collapsed_splits') || '[]');
+        
+        if (currentlyCollapsed) {
+          plansList.style.display = 'flex';
+          arrow.innerText = '▼';
+          collapsedList = collapsedList.filter(s => s !== splitName);
+        } else {
+          plansList.style.display = 'none';
+          arrow.innerText = '▶';
+          if (!collapsedList.includes(splitName)) {
+            collapsedList.push(splitName);
+          }
+        }
+        localStorage.setItem('ironprogress_v2_collapsed_splits', JSON.stringify(collapsedList));
+      };
 
       groupedPlans[splitName].forEach(plan => {
         const card = document.createElement('div');
@@ -397,6 +430,8 @@ function renderHome() {
 
       const card = document.createElement('div');
       card.className = 'recent-workout-card';
+      card.style.cursor = 'pointer';
+      card.onclick = () => showWorkoutHistoryDetail(work.id);
       card.innerHTML = `
         <div class="recent-workout-info">
           <h4>${work.planName}</h4>
@@ -453,7 +488,6 @@ function updateGlobalMetrics() {
 }
 
 // --- CREATOR VIEW CONTROLLER (WITH DYNAMIC PROGRESSION FIELDS) ---
-let exerciseFieldIndex = 0;
 
 function setupCreatorView() {
   const container = document.getElementById('creator-exercises-container');
@@ -461,6 +495,7 @@ function setupCreatorView() {
   exerciseFieldIndex = 0;
   
   addExerciseField();
+  populateSplitsDatalist();
 }
 
 function resetCreatorForm() {
@@ -470,6 +505,114 @@ function resetCreatorForm() {
   document.getElementById('btn-save-plan').innerText = 'Plan speichern';
   setupCreatorView();
 }
+
+function getExercisesFromDOM() {
+  const cards = document.querySelectorAll('.creator-exercise-card');
+  const list = [];
+  cards.forEach(card => {
+    const name = card.querySelector('.ex-name').value.trim();
+    const sets = parseInt(card.querySelector('.ex-sets').value);
+    const reps = parseInt(card.querySelector('.ex-reps').value);
+    const rest = parseInt(card.querySelector('.ex-rest').value);
+    
+    // Advanced fields
+    const type = card.querySelector('.ex-type').value;
+    const repMin = parseInt(card.querySelector('.ex-rep-min').value) || 8;
+    const repMax = parseInt(card.querySelector('.ex-rep-max').value) || 12;
+    const weightsText = card.querySelector('.ex-available-weights').value.trim();
+    
+    const availableWeights = weightsText ? weightsText.split(',')
+      .map(w => parseFloat(w.trim()))
+      .filter(w => !isNaN(w) && w > 0)
+      .sort((a, b) => a - b) : [];
+      
+    list.push({
+      name,
+      sets,
+      reps,
+      rest,
+      exercise_type: type,
+      target_rep_min: repMin,
+      target_rep_max: repMax,
+      available_weights: availableWeights
+    });
+  });
+  return list;
+}
+
+window.moveExerciseField = function(index, direction) {
+  const exercises = getExercisesFromDOM();
+  const targetIndex = index + direction;
+  
+  if (targetIndex < 0 || targetIndex >= exercises.length) return;
+  
+  // Swap
+  const temp = exercises[index];
+  exercises[index] = exercises[targetIndex];
+  exercises[targetIndex] = temp;
+  
+  // Re-render
+  const container = document.getElementById('creator-exercises-container');
+  container.innerHTML = '';
+  exerciseFieldIndex = 0;
+  
+  exercises.forEach(ex => {
+    addExerciseField(
+      ex.name,
+      ex.sets,
+      ex.reps,
+      ex.rest,
+      ex.exercise_type,
+      ex.target_rep_min,
+      ex.target_rep_max,
+      ex.available_weights
+    );
+  });
+};
+
+function populateSplitsDatalist() {
+  const datalist = document.getElementById('existing-splits');
+  if (!datalist) return;
+  datalist.innerHTML = '';
+  
+  const uniqueSplits = new Set();
+  state.plans.forEach(plan => {
+    if (plan.split && plan.split.trim()) {
+      uniqueSplits.add(plan.split.trim());
+    }
+  });
+  
+  uniqueSplits.forEach(split => {
+    const option = document.createElement('option');
+    option.value = split;
+    datalist.appendChild(option);
+  });
+}
+
+function confirmCancelCreator() {
+  const name = document.getElementById('plan-name').value.trim();
+  const split = document.getElementById('plan-split').value.trim();
+  const exercises = getExercisesFromDOM();
+  
+  const hasExercisesContent = exercises.some(ex => ex.name || (ex.available_weights && ex.available_weights.length > 0));
+  const isTouched = name || split || hasExercisesContent;
+  
+  if (isTouched) {
+    if (!confirm("Möchtest du die Bearbeitung des Plans wirklich abbrechen? Alle nicht gespeicherten Daten gehen verloren.")) {
+      return;
+    }
+  }
+  
+  resetCreatorForm();
+  showView('home', 'Mein Training');
+}
+
+window.removeExerciseField = function(index) {
+  const card = document.getElementById(`creator-ex-card-${index}`);
+  if (card) {
+    card.remove();
+  }
+};
 
 function addExerciseField(name = '', sets = 3, reps = 10, rest = 90, exercise_type = 'compound', target_rep_min = 8, target_rep_max = 12, available_weights = []) {
   const container = document.getElementById('creator-exercises-container');
@@ -484,7 +627,11 @@ function addExerciseField(name = '', sets = 3, reps = 10, rest = 90, exercise_ty
   card.innerHTML = `
     <div class="creator-exercise-header">
       <span class="creator-exercise-title">Übung #${index + 1}</span>
-      ${index > 0 ? `<button type="button" class="btn-remove-exercise" onclick="removeExerciseField(${index})">Entfernen</button>` : ''}
+      <div class="creator-exercise-controls">
+        <button type="button" class="btn-move-exercise" onclick="moveExerciseField(${index}, -1)">▲</button>
+        <button type="button" class="btn-move-exercise" onclick="moveExerciseField(${index}, 1)">▼</button>
+        ${index > 0 ? `<button type="button" class="btn-remove-exercise" onclick="removeExerciseField(${index})">Löschen</button>` : ''}
+      </div>
     </div>
     
     <div class="form-group" style="margin-bottom: 12px;">
@@ -634,6 +781,7 @@ function editPlan(planId) {
     );
   });
 
+  populateSplitsDatalist();
   showView('creator', 'Plan bearbeiten');
 }
 
@@ -727,11 +875,15 @@ function startWorkout(planId) {
   const plan = state.plans.find(p => p.id === planId);
   if (!plan) return;
 
+  const latestBodyWeight = (state.weightHistory && state.weightHistory.length > 0)
+    ? [...state.weightHistory].sort((a, b) => new Date(b.date) - new Date(a.date))[0].weight
+    : 0;
+
   state.activeWorkout = {
     planId: plan.id,
     planName: plan.name,
     splitName: plan.split || 'Einzelne Pläne',
-    startTime: new Date(),
+    startTime: Date.now(), // Store absolute timestamp
     exercises: plan.exercises.map(ex => {
       const setsData = [];
       let historyWeight = 0;
@@ -749,12 +901,18 @@ function startWorkout(planId) {
         }
       }
 
+      // Pre-fill latest body weight for bodyweight exercises if no past history exists
+      if (historyWeight === 0 && ex.exercise_type === 'bodyweight' && latestBodyWeight > 0) {
+        historyWeight = latestBodyWeight;
+      }
+
       for (let s = 0; s < ex.sets; s++) {
         setsData.push({
           setNumber: s + 1,
           weight: historyWeight,
           reps: historyReps,
-          done: false
+          done: false,
+          type: 'normal' // default set type
         });
       }
 
@@ -773,14 +931,13 @@ function startWorkout(planId) {
 
   renderWorkoutView();
 
-  workoutSecondsElapsed = 0;
   document.getElementById('workout-duration-clock').innerText = "00:00";
   
   if (workoutDurationInterval) clearInterval(workoutDurationInterval);
   workoutDurationInterval = setInterval(() => {
-    workoutSecondsElapsed++;
-    const mins = Math.floor(workoutSecondsElapsed / 60).toString().padStart(2, '0');
-    const secs = (workoutSecondsElapsed % 60).toString().padStart(2, '0');
+    const elapsedSeconds = Math.floor((Date.now() - state.activeWorkout.startTime) / 1000);
+    const mins = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+    const secs = (elapsedSeconds % 60).toString().padStart(2, '0');
     document.getElementById('workout-duration-clock').innerText = `${mins}:${secs}`;
   }, 1000);
 
@@ -795,10 +952,40 @@ function renderWorkoutView() {
     const card = document.createElement('div');
     card.className = 'workout-exercise-card';
     
+    // Find last performance text
+    let lastPerformanceText = '';
+    const relevantHistory = [...state.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const pastWorkout = relevantHistory.find(w => w.exercises.some(pe => pe.name.toLowerCase() === ex.name.toLowerCase()));
+    
+    if (pastWorkout) {
+      const pastEx = pastWorkout.exercises.find(pe => pe.name.toLowerCase() === ex.name.toLowerCase());
+      const setsStr = pastEx.sets.map(s => {
+        let prefix = '';
+        if (s.type === 'warmup') prefix = 'W:';
+        else if (s.type === 'drop') prefix = 'D:';
+        return `${prefix}${s.weight}kg x ${s.reps}`;
+      }).join(' / ');
+      lastPerformanceText = `<div class="workout-last-performance">Letztes Mal: ${setsStr}</div>`;
+    }
+    
     let tableRows = ex.sets.map((set, setIdx) => {
+      let typeLabel = `Satz ${set.setNumber}`;
+      let typeClass = "";
+      if (set.type === 'warmup') {
+        typeLabel = `W${set.setNumber}`;
+        typeClass = "warmup";
+      } else if (set.type === 'drop') {
+        typeLabel = `D${set.setNumber}`;
+        typeClass = "drop";
+      }
+      
       return `
         <tr class="workout-set-row ${set.done ? 'done' : ''}" id="set-row-${exIdx}-${setIdx}">
-          <td>Satz ${set.setNumber}</td>
+          <td>
+            <button type="button" class="btn-set-type ${typeClass}" onclick="toggleSetType(${exIdx}, ${setIdx})">
+              ${typeLabel}
+            </button>
+          </td>
           <td>
             <input type="number" 
                    class="set-input set-weight" 
@@ -807,7 +994,7 @@ function renderWorkoutView() {
                    step="0.5" 
                    data-ex="${exIdx}" 
                    data-set="${setIdx}"
-                   onchange="updateWorkoutSet(this, 'weight')">
+                   oninput="updateWorkoutSet(this, 'weight')">
             <span style="font-size:12px; color:var(--text-secondary);">kg</span>
           </td>
           <td>
@@ -816,7 +1003,7 @@ function renderWorkoutView() {
                    value="${set.reps}" 
                    data-ex="${exIdx}" 
                    data-set="${setIdx}"
-                   onchange="updateWorkoutSet(this, 'reps')">
+                   oninput="updateWorkoutSet(this, 'reps')">
           </td>
           <td>
             <button class="btn-check-set" data-ex="${exIdx}" data-set="${setIdx}" onclick="toggleSetCheck(this)">
@@ -830,7 +1017,10 @@ function renderWorkoutView() {
     }).join('');
 
     card.innerHTML = `
-      <h3>${ex.name}</h3>
+      <div style="display:flex; flex-direction:column; margin-bottom: 12px;">
+        <h3 style="margin-bottom:2px;">${ex.name}</h3>
+        ${lastPerformanceText}
+      </div>
       <table class="workout-sets-table">
         <thead>
           <tr>
@@ -844,6 +1034,10 @@ function renderWorkoutView() {
           ${tableRows}
         </tbody>
       </table>
+      <div class="workout-exercise-card-controls" style="display:flex; justify-content:space-between; margin-top:12px; gap: 10px;">
+        <button type="button" class="btn-text-link" style="font-size: 13px;" onclick="addWorkoutSet(${exIdx})">+ Satz hinzufügen</button>
+        ${ex.sets.length > 1 ? `<button type="button" class="btn-text-danger" style="font-size: 13px; color: var(--color-danger); border: none; background: none; cursor: pointer;" onclick="removeWorkoutSet(${exIdx})">- Satz entfernen</button>` : ''}
+      </div>
     `;
     container.appendChild(card);
   });
@@ -883,7 +1077,8 @@ window.toggleSetCheck = function(btnEl) {
 
     const exObj = state.activeWorkout.exercises[exIdx];
     if (exObj.restTime > 0) {
-      triggerRestTimer(exObj.name, `Satz ${setObj.setNumber} abgeschlossen`, exObj.restTime);
+      const prefix = setObj.type === 'warmup' ? 'W' : (setObj.type === 'drop' ? 'D' : 'Satz ');
+      triggerRestTimer(exObj.name, `${prefix}${setObj.setNumber} abgeschlossen`, exObj.restTime);
     }
   } else {
     rowEl.classList.remove('done');
@@ -919,13 +1114,15 @@ function finishWorkout() {
   // Calculate average rest time actually logged
   const avgRest = state.activeWorkout.exercises.reduce((sum, e) => sum + e.restTime, 0) / state.activeWorkout.exercises.length;
 
+  const elapsedSeconds = Math.floor((Date.now() - state.activeWorkout.startTime) / 1000);
+
   const newWorkoutRecord = {
     id: `workout-record-${Date.now()}`,
     planId: state.activeWorkout.planId,
     planName: state.activeWorkout.planName,
     splitName: state.activeWorkout.splitName,
     date: new Date().toISOString(),
-    durationMinutes: Math.max(1, Math.round(workoutSecondsElapsed / 60)),
+    durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)),
     avgRestSeconds: avgRest,
     exercises: state.activeWorkout.exercises.map(ex => {
       return {
@@ -1738,6 +1935,64 @@ function renderWeightProgressionStats(timeRangeStr) {
       }
     }
   });
+
+  // Calculate and display weight trend analysis
+  renderWeightTrendAnalysis(filteredWeight);
+}
+
+function renderWeightTrendAnalysis(filteredWeight) {
+  const analysisEl = document.getElementById('weight-trend-analysis-text');
+  if (!analysisEl) return;
+  
+  if (filteredWeight.length < 2) {
+    analysisEl.innerHTML = `<span style="color:var(--text-secondary);">Trage mindestens 2 Gewichtswerte im gewählten Zeitraum ein, um den wöchentlichen Trend zu analysieren.</span>`;
+    return;
+  }
+  
+  const sorted = [...filteredWeight].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const firstDate = new Date(sorted[0].date);
+  const n = sorted.length;
+  
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  
+  for (let i = 0; i < n; i++) {
+    const d = new Date(sorted[i].date);
+    const diffDays = (d - firstDate) / (1000 * 60 * 60 * 24);
+    const y = sorted[i].weight;
+    
+    sumX += diffDays;
+    sumY += y;
+    sumXY += diffDays * y;
+    sumXX += diffDays * diffDays;
+  }
+  
+  let slope = 0;
+  const denominator = (n * sumXX - sumX * sumX);
+  if (denominator !== 0) {
+    slope = (n * sumXY - sumX * sumY) / denominator;
+  }
+  
+  const weeklySlope = slope * 7;
+  let trendText = "";
+  let icon = "⚖️";
+  
+  if (Math.abs(weeklySlope) < 0.05) {
+    trendText = `Dein Gewicht ist <strong>stabil</strong> (Trend: <strong>${weeklySlope > 0 ? '+' : ''}${weeklySlope.toFixed(2)} kg/Woche</strong>).`;
+    icon = "🧘";
+  } else if (weeklySlope < 0) {
+    trendText = `Du verlierst durchschnittlich <strong>${Math.abs(weeklySlope).toFixed(2)} kg/Woche</strong> (Abnehm-Trend).`;
+    icon = "📉";
+  } else {
+    trendText = `Du nimmst durchschnittlich <strong>${weeklySlope.toFixed(2)} kg/Woche</strong> zu (Aufbau-Trend).`;
+    icon = "📈";
+  }
+  
+  analysisEl.innerHTML = `
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:24px;">${icon}</span>
+      <span style="font-size:13.5px; line-height:1.45; color:#ffffff;">${trendText}</span>
+    </div>
+  `;
 }
 
 function renderPlanStats(filteredHistory) {
@@ -1896,6 +2151,185 @@ function renderExerciseStats(filteredHistory) {
     }
   });
 }
+// --- WORKOUT HISTORY DETAIL CONTROLLER ---
+window.showWorkoutHistoryDetail = function(workoutId) {
+  const workout = state.history.find(h => h.id === workoutId);
+  if (!workout) return;
+  
+  const date = new Date(workout.date);
+  const dateStr = date.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  
+  document.getElementById('history-detail-title').innerText = workout.planName;
+  document.getElementById('history-detail-date').innerText = dateStr;
+  
+  let totalVolume = 0;
+  const listContainer = document.getElementById('history-detail-exercises-list');
+  listContainer.innerHTML = '';
+  
+  workout.exercises.forEach(ex => {
+    const card = document.createElement('div');
+    card.className = 'history-sheet-exercise';
+    
+    let exVol = 0;
+    const setsHTML = ex.sets.map(s => {
+      exVol += s.weight * s.reps;
+      totalVolume += s.weight * s.reps;
+      
+      let badgeHTML = '';
+      if (s.type === 'warmup') badgeHTML = '<span class="set-type-badge warmup">W</span>';
+      else if (s.type === 'drop') badgeHTML = '<span class="set-type-badge drop">D</span>';
+      
+      return `
+        <div class="history-sheet-set-row">
+          <span>Satz ${s.setNumber} ${badgeHTML}</span>
+          <span style="font-weight:600;">${s.weight} kg x ${s.reps}</span>
+        </div>
+      `;
+    }).join('');
+    
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:0.5px solid var(--border-color); padding-bottom:6px;">
+        <h4 style="font-size:14px; font-weight:700;">${ex.name}</h4>
+        <span style="font-size:12px; color:var(--text-secondary);">${exVol.toLocaleString()} kg</span>
+      </div>
+      <div>${setsHTML}</div>
+    `;
+    listContainer.appendChild(card);
+  });
+  
+  document.getElementById('history-detail-volume').innerText = `${totalVolume.toLocaleString()} kg`;
+  document.getElementById('history-detail-duration').innerText = `${workout.durationMinutes} Min`;
+  
+  const deleteBtn = document.getElementById('btn-delete-history-record');
+  deleteBtn.onclick = () => {
+    if (confirm('Möchtest du diesen Trainingseintrag wirklich dauerhaft aus deiner Historie löschen?')) {
+      state.history = state.history.filter(h => h.id !== workoutId);
+      saveToLocalStorage();
+      closeHistoryDetail();
+      renderHome();
+    }
+  };
+  
+  document.getElementById('history-backdrop').classList.add('active');
+  document.getElementById('history-sheet').classList.add('active');
+};
+
+window.closeHistoryDetail = function() {
+  document.getElementById('history-backdrop').classList.remove('active');
+  document.getElementById('history-sheet').classList.remove('active');
+};
+
+// --- DATA BACKUP IMPORT/EXPORT ---
+function exportBackupJSON() {
+  const backupData = {
+    plans: state.plans,
+    history: state.history,
+    weightHistory: state.weightHistory,
+    settings: state.settings
+  };
+  
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `IRONPROGRESS_Backup_${new Date().toISOString().slice(0,10)}.json`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function importBackupJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      if (!data.plans || !data.history) {
+        alert('Ungültiges Backup-Format. Pläne oder Historie fehlen.');
+        return;
+      }
+      
+      if (confirm('Möchtest du dieses Backup wirklich einspielen? Alle aktuellen Pläne und Logs werden überschrieben!')) {
+        state.plans = data.plans || [];
+        state.history = data.history || [];
+        state.weightHistory = data.weightHistory || [];
+        if (data.settings) state.settings = data.settings;
+        
+        saveToLocalStorage();
+        alert('Backup erfolgreich eingespielt! Die App wird neu geladen.');
+        location.reload();
+      }
+    } catch (err) {
+      alert('Fehler beim Lesen der JSON-Datei: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// --- OPTIONEN: HANDBUCH TOGGLE ---
+window.toggleReadmeGuide = function() {
+  const content = document.getElementById('readme-guide-content');
+  const btn = document.getElementById('btn-toggle-readme');
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    btn.innerText = "📖 Handbuch einklappen";
+  } else {
+    content.classList.add('hidden');
+    btn.innerText = "📖 Handbuch anzeigen";
+  }
+};
+
+// --- ACTIVE WORKOUT SET MANAGEMENT ---
+window.addWorkoutSet = function(exIdx) {
+  if (!state.activeWorkout) return;
+  const ex = state.activeWorkout.exercises[exIdx];
+  const lastSet = ex.sets[ex.sets.length - 1];
+  
+  ex.sets.push({
+    setNumber: ex.sets.length + 1,
+    weight: lastSet ? lastSet.weight : 0,
+    reps: lastSet ? lastSet.reps : 10,
+    done: false,
+    type: 'normal'
+  });
+  
+  renderWorkoutView();
+};
+
+window.removeWorkoutSet = function(exIdx) {
+  if (!state.activeWorkout) return;
+  const ex = state.activeWorkout.exercises[exIdx];
+  if (ex.sets.length <= 1) return;
+  
+  ex.sets.pop();
+  renderWorkoutView();
+};
+
+window.toggleSetType = function(exIdx, setIdx) {
+  if (!state.activeWorkout) return;
+  const set = state.activeWorkout.exercises[exIdx].sets[setIdx];
+  const rowEl = document.getElementById(`set-row-${exIdx}-${setIdx}`);
+  const btn = rowEl.querySelector('.btn-set-type');
+  
+  if (!set.type || set.type === 'normal') {
+    set.type = 'warmup';
+    btn.className = "btn-set-type warmup";
+    btn.innerText = `W${set.setNumber}`;
+  } else if (set.type === 'warmup') {
+    set.type = 'drop';
+    btn.className = "btn-set-type drop";
+    btn.innerText = `D${set.setNumber}`;
+  } else {
+    set.type = 'normal';
+    btn.className = "btn-set-type";
+    btn.innerText = `Satz ${set.setNumber}`;
+  }
+};
 
 function unlockUserAudio() {
   const audio = document.getElementById('audio-timer-alert');
@@ -1941,10 +2375,7 @@ function setupEventListeners() {
   };
 
   document.getElementById('btn-add-exercise').onclick = () => addExerciseField();
-  document.getElementById('btn-cancel-creator').onclick = () => {
-    resetCreatorForm();
-    showView('home', 'Mein Training');
-  };
+  document.getElementById('btn-cancel-creator').onclick = confirmCancelCreator;
   document.getElementById('creator-form').onsubmit = saveNewPlan;
 
   document.getElementById('btn-cancel-workout').onclick = cancelWorkout;
@@ -1980,6 +2411,17 @@ function setupEventListeners() {
   document.getElementById('btn-export-csv').onclick = exportToCSV;
   document.getElementById('btn-load-mockdata').onclick = loadDeveloperMockData;
   document.getElementById('btn-reset-app').onclick = resetApp;
+
+  // Backup handlers
+  document.getElementById('btn-export-backup').onclick = exportBackupJSON;
+  document.getElementById('btn-trigger-import').onclick = () => {
+    document.getElementById('input-import-file').click();
+  };
+  document.getElementById('input-import-file').onchange = importBackupJSON;
+
+  // History details sheet
+  document.getElementById('btn-close-history-detail').onclick = closeHistoryDetail;
+  document.getElementById('history-backdrop').onclick = closeHistoryDetail;
   
   // Test diagnostics activation
   document.getElementById('btn-run-diagnostics').onclick = triggerDiagnostics;

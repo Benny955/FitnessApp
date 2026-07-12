@@ -1490,4 +1490,141 @@ body {
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* IRONPROGRESS v3.0 Additional Styles */
+
+/* 1. Plan Creator: Exercise reordering controls */
+.creator-exercise-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-move-exercise {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-primary);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-move-exercise:hover {
+  background-color: var(--bg-secondary);
+  border-color: var(--color-primary);
+}
+
+/* 2. Workout History Details sheet styles */
+.history-sheet-exercise {
+  background-color: var(--bg-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 12px;
+  border: 0.5px solid var(--border-color);
+  margin-bottom: 10px;
+}
+
+.history-sheet-set-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 6px 0;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-sheet-set-row:last-child {
+  border-bottom: none;
+}
+
+/* 3. Workout view: Set Type Buttons & badges */
+.btn-set-type {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 55px;
+  text-align: center;
+  transition: var(--transition-smooth);
+  outline: none;
+}
+
+.btn-set-type.warmup {
+  background-color: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+  border-color: #ff9f0a;
+}
+
+.btn-set-type.drop {
+  background-color: rgba(191, 90, 242, 0.15);
+  color: #bf5af2;
+  border-color: #bf5af2;
+}
+
+.set-type-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  text-transform: uppercase;
+}
+
+.set-type-badge.warmup {
+  background-color: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+  border: 0.5px solid #ff9f0a;
+}
+
+.set-type-badge.drop {
+  background-color: rgba(191, 90, 242, 0.15);
+  color: #bf5af2;
+  border: 0.5px solid #bf5af2;
+}
+
+/* 4. Active Workout Inline Previous session stats */
+.workout-last-performance {
+  font-size: 12px;
+  color: var(--color-primary);
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+/* 5. Collapsible Splits Folders Arrow transition */
+.split-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+/* 6. Settings Details and general alignment tweaks */
+.settings-buttons-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.btn-text-danger-border {
+  background: transparent;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  padding: 12px;
+  font-weight: 600;
+  border-radius: var(--border-radius-md);
+  font-size: 15px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  text-align: center;
+}
+
+.btn-text-danger-border:hover {
+  background-color: rgba(255, 59, 48, 0.1);
+}
+
 

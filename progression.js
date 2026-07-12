@@ -107,8 +107,8 @@ class ProgressionService {
     // Map sessions to simplified metrics
     const sessionData = sessions.map(w => {
       const ex = w.exercises.find(e => e.name.toLowerCase() === exerciseName.toLowerCase());
-      // Filter out warm-up sets (marked as weight = 0 or done = false)
-      const workSets = ex.sets.filter(s => s.done && s.weight > 0);
+      // Filter out warm-up and drop sets (only consider 'normal' or undefined types)
+      const workSets = ex.sets.filter(s => s.done && s.weight > 0 && s.type !== 'warmup' && s.type !== 'drop');
       
       // session_volume: sum of weight * reps for all work sets
       const volume = workSets.reduce((sum, s) => sum + (s.weight * s.reps), 0);
